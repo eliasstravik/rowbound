@@ -1,6 +1,6 @@
 {
   "name": "rowbound",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Open-source CLI and MCP server for Google Sheets enrichment — waterfalls, conditions, HTTP API integrations",
   "type": "module",
   "bin": {
@@ -15,7 +15,6 @@
     "lint:fix": "biome check --write src/",
     "format": "biome format src/",
     "format:fix": "biome format --write src/",
-    "prepare": "npm run build",
     "prepublishOnly": "npm run lint && npm run test && npm run build"
   },
   "dependencies": {
