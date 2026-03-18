@@ -128,9 +128,7 @@ export function registerRun(program: Command): void {
           if (opts.rows && isList) {
             // Comma-separated rows: convert sheet rows to 0-based data indices
             rowSet = new Set(
-              opts.rows
-                .split(",")
-                .map((s) => parseInt(s, 10) - 2), // sheet row 2 = data index 0
+              opts.rows.split(",").map((s) => parseInt(s, 10) - 2), // sheet row 2 = data index 0
             );
           } else if (opts.rows && isRange) {
             range = opts.rows.replace("-", ":");

@@ -302,7 +302,10 @@ export function registerConfig(program: Command): void {
     .description("Update pipeline settings")
     .argument("<sheetId>", "Google Sheets spreadsheet ID")
     .option("--concurrency <n>", "Max concurrent rows")
-    .option("--rate-limit <n>", "Seconds between requests (e.g. 10 = 1 req per 10s, 0.1 = 10 req/s)")
+    .option(
+      "--rate-limit <n>",
+      "Seconds between requests (e.g. 10 = 1 req per 10s, 0.1 = 10 req/s)",
+    )
     .option("--retry-attempts <n>", "Number of retry attempts")
     .option(
       "--retry-backoff <strategy>",
@@ -351,7 +354,11 @@ export function registerConfig(program: Command): void {
           if (opts.rateLimit !== undefined) {
             const val = parseFloat(opts.rateLimit);
             if (Number.isNaN(val) || val < 0) {
-              console.error(error("--rate-limit must be a non-negative number (0 to disable)."));
+              console.error(
+                error(
+                  "--rate-limit must be a non-negative number (0 to disable).",
+                ),
+              );
               process.exitCode = 1;
               return;
             }

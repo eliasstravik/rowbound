@@ -104,7 +104,9 @@ export function registerStatus(program: Command): void {
         // Settings
         console.log(dim("\nSettings:"));
         console.log(`  Concurrency:   ${config.settings.concurrency}`);
-        console.log(`  Rate limit:    ${config.settings.rateLimit}s between requests`);
+        console.log(
+          `  Rate limit:    ${config.settings.rateLimit}s between requests`,
+        );
         console.log(
           `  Retry:         ${config.settings.retryAttempts} attempts (${config.settings.retryBackoff})`,
         );

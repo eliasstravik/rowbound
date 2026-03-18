@@ -108,24 +108,29 @@ export function columnIndexToLetter(index: number): string {
  */
 export function runGws(args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile("gws", args, { maxBuffer: 50 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-          reject(
-            new Error(
-              "'gws' CLI not found. Rowbound requires the Google Workspace CLI (gws) to interact with Google Sheets.\n" +
-                "Install: npm install -g @googleworkspace/cli\n" +
-                "Then run: gws auth setup\n" +
-                "See: https://github.com/googleworkspace/cli",
-            ),
-          );
+    execFile(
+      "gws",
+      args,
+      { maxBuffer: 50 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            reject(
+              new Error(
+                "'gws' CLI not found. Rowbound requires the Google Workspace CLI (gws) to interact with Google Sheets.\n" +
+                  "Install: npm install -g @googleworkspace/cli\n" +
+                  "Then run: gws auth setup\n" +
+                  "See: https://github.com/googleworkspace/cli",
+              ),
+            );
+            return;
+          }
+          reject(new Error(`gws failed: ${stderr || error.message}`));
           return;
         }
-        reject(new Error(`gws failed: ${stderr || error.message}`));
-        return;
-      }
-      resolve(stdout);
-    });
+        resolve(stdout);
+      },
+    );
   });
 }
 
