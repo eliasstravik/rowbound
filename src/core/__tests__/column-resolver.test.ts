@@ -74,11 +74,14 @@ function createMockSheetsAdapter(opts: {
   sheets?: Array<{ gid: number; name: string }>;
 }): SheetsAdapter & {
   createdRanges: Array<{ rangeId: string; columnIndex: number }>;
+  deletedRanges: string[];
 } {
   const createdRanges: Array<{ rangeId: string; columnIndex: number }> = [];
+  const deletedRanges: string[] = [];
   const defaultSheets = opts.sheets ?? [{ gid: 0, name: "Sheet1" }];
   return {
     createdRanges,
+    deletedRanges,
     getHeaders: vi.fn().mockResolvedValue(opts.headers),
     readColumnRanges: vi.fn().mockResolvedValue(opts.namedRanges ?? new Map()),
     createColumnRange: vi
@@ -88,9 +91,15 @@ function createMockSheetsAdapter(opts: {
           createdRanges.push({ rangeId, columnIndex });
         },
       ),
+    deleteColumnRange: vi
+      .fn()
+      .mockImplementation(async (_ref: SheetRef, rangeId: string) => {
+        deletedRanges.push(rangeId);
+      }),
     listSheets: vi.fn().mockResolvedValue(defaultSheets),
   } as unknown as SheetsAdapter & {
     createdRanges: Array<{ rangeId: string; columnIndex: number }>;
+    deletedRanges: string[];
   };
 }
 
@@ -167,6 +176,7 @@ describe("reconcile", () => {
     expect(result.configChanged).toBe(false);
     expect(result.messages).toHaveLength(0);
     expect(adapter.createdRanges).toHaveLength(0);
+    expect(result.orphanedRanges).toHaveLength(0);
   });
 
   it("detects rename — updates label, key stays stable", async () => {
@@ -420,6 +430,78 @@ describe("reconcile", () => {
     expect(result.configChanged).toBe(true);
     expect(result.tabConfig.name).toBe("Renamed Tab");
     expect(result.messages.some((m) => m.includes("renamed"))).toBe(true);
+  });
+
+  it("prunes orphaned ranges when multiple ranges point to the same column after deletion", async () => {
+    // Scenario: columns "Company Details" (col_cd) and "Website Exa" (col_we)
+    // were deleted from the sheet. Google Sheets shifted their named ranges so
+    // they now point to existing columns "Serper" (col_serp) and "GPT Nano" (col_gpt).
+    const columns = {
+      col_serp: "Serper",
+      col_gpt: "GPT Nano",
+      col_cd: "Company Details",
+      col_we: "Website Exa",
+    };
+    // After deletion: col_cd shifted to index 0 (same as col_serp),
+    // col_we shifted to index 1 (same as col_gpt)
+    const namedRanges = new Map([
+      ["col_serp", 0],
+      ["col_gpt", 1],
+      ["col_cd", 0], // orphaned — shifted onto col_serp's column
+      ["col_we", 1], // orphaned — shifted onto col_gpt's column
+    ]);
+    const adapter = createMockSheetsAdapter({
+      headers: ["Serper", "GPT Nano"],
+      namedRanges,
+    });
+
+    const config = makeV2Config({
+      "0": { name: "Sheet1", columns, actions: [] },
+    });
+    const result = await reconcile(adapter, REF, config);
+
+    expect(result.configChanged).toBe(true);
+    // Only the legitimate ranges survive
+    expect(result.tabConfig.columns).toEqual({
+      col_serp: "Serper",
+      col_gpt: "GPT Nano",
+    });
+    // Orphaned range IDs returned for caller to clean up
+    expect(result.orphanedRanges).toContain("col_cd");
+    expect(result.orphanedRanges).toContain("col_we");
+    expect(result.orphanedRanges).toHaveLength(2);
+    // reconcile itself does NOT delete ranges (callers do after saving config)
+    expect(adapter.deletedRanges).toHaveLength(0);
+    // Messages mention orphaned removal
+    expect(
+      result.messages.filter((m) => m.includes("orphaned")),
+    ).toHaveLength(2);
+  });
+
+  it("handles collision when no range matches the header by old name", async () => {
+    // Edge case: two ranges point to the same column, but neither old name
+    // matches the current header (e.g., header was also renamed).
+    // Tiebreaker is deterministic: lexicographically first ID wins.
+    const columns = { bbb: "old_name_1", aaa: "old_name_2" };
+    const namedRanges = new Map([
+      ["bbb", 0],
+      ["aaa", 0], // collision
+    ]);
+    const adapter = createMockSheetsAdapter({
+      headers: ["new_name"],
+      namedRanges,
+    });
+
+    const config = makeV2Config({
+      "0": { name: "Sheet1", columns, actions: [] },
+    });
+    const result = await reconcile(adapter, REF, config);
+
+    expect(result.configChanged).toBe(true);
+    // "aaa" survives (lexicographically first), "bbb" is pruned
+    expect(result.tabConfig.columns).toEqual({ aaa: "new_name" });
+    expect(result.orphanedRanges).toEqual(["bbb"]);
+    expect(adapter.deletedRanges).toHaveLength(0);
   });
 
   it("multi-tab config only reconciles the target tab", async () => {

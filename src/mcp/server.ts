@@ -7,7 +7,7 @@ import { SheetsAdapter } from "../adapters/sheets/sheets-adapter.js";
 import { defaultSettings } from "../core/defaults.js";
 import { runPipeline } from "../core/engine.js";
 import { buildSafeEnv } from "../core/env.js";
-import { reconcile } from "../core/reconcile.js";
+import { cleanupOrphanedRanges, reconcile } from "../core/reconcile.js";
 import { formatRunDetail, formatRunList } from "../core/run-format.js";
 import { listRuns, readRunState } from "../core/run-state.js";
 import { safeCompare } from "../core/safe-compare.js";
@@ -263,6 +263,9 @@ server.registerTool(
       const reconciled = await reconcile(adapter, ref, config);
       if (reconciled.configChanged) {
         await adapter.writeConfig(ref, reconciled.config);
+      }
+      if (reconciled.orphanedRanges.length > 0) {
+        await cleanupOrphanedRanges(adapter, ref, reconciled.orphanedRanges);
       }
 
       const tabConfig = reconciled.tabConfig;
@@ -607,6 +610,9 @@ server.registerTool(
       if (reconciled.configChanged) {
         await adapter.writeConfig(ref, reconciled.config);
       }
+      if (reconciled.orphanedRanges.length > 0) {
+        await cleanupOrphanedRanges(adapter, ref, reconciled.orphanedRanges);
+      }
 
       const tabConfig = reconciled.tabConfig;
       const cols = Object.keys(tabConfig.columns).length;
@@ -916,6 +922,13 @@ server.registerTool(
           const reconciled = await reconcile(adapter, ref, activeConfig);
           if (reconciled.configChanged) {
             await adapter.writeConfig(ref, reconciled.config);
+          }
+          if (reconciled.orphanedRanges.length > 0) {
+            await cleanupOrphanedRanges(
+              adapter,
+              ref,
+              reconciled.orphanedRanges,
+            );
           }
 
           const tabCfg = reconciled.tabConfig;

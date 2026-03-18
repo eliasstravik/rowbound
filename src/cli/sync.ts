@@ -1,6 +1,6 @@
 import type { Command } from "commander";
 import { SheetsAdapter } from "../adapters/sheets/sheets-adapter.js";
-import { reconcile } from "../core/reconcile.js";
+import { cleanupOrphanedRanges, reconcile } from "../core/reconcile.js";
 import { validateConfig } from "../core/validator.js";
 import { dim, error, success, warn } from "./format.js";
 
@@ -83,6 +83,11 @@ export function registerSync(program: Command): void {
         if (reconciled.configChanged) {
           await adapter.writeConfig(ref, reconciled.config);
           console.log(`\n${success("\u2713")} Config saved`);
+        }
+
+        // --- 5b. Clean up orphaned named ranges after config is safely saved ---
+        if (reconciled.orphanedRanges.length > 0) {
+          await cleanupOrphanedRanges(adapter, ref, reconciled.orphanedRanges);
         }
 
         // --- 6. Summary ---

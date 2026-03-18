@@ -23,6 +23,7 @@ export {
 export { RateLimiter } from "./core/rate-limiter.js";
 export {
   type ReconcileResult,
+  cleanupOrphanedRanges,
   reconcile,
 } from "./core/reconcile.js";
 export {

@@ -13,6 +13,8 @@ export interface ReconcileResult {
   messages: string[];
   /** Whether the config was modified and needs re-saving */
   configChanged: boolean;
+  /** Named range IDs that should be deleted from the sheet (orphaned by column deletion) */
+  orphanedRanges: string[];
 }
 
 /**
@@ -125,8 +127,56 @@ export async function reconcile(
   // Track which header indices are covered by existing ranges
   const coveredIndices = new Set<number>();
 
+  // --- Pre-pass: detect collisions (multiple ranges → same column index) ---
+  // This happens when columns are deleted from the sheet: Google Sheets shifts
+  // named ranges rather than deleting them, so orphaned ranges end up pointing
+  // to columns that already have their own range.
+  const colIndexToRanges = new Map<number, string[]>();
+  for (const [rangeId, colIndex] of sheetRanges) {
+    const existing = colIndexToRanges.get(colIndex) ?? [];
+    existing.push(rangeId);
+    colIndexToRanges.set(colIndex, existing);
+  }
+
+  const orphanedRanges = new Set<string>();
+  for (const [colIndex, rangeIds] of colIndexToRanges) {
+    if (rangeIds.length <= 1) continue;
+
+    const currentHeader = headers[colIndex];
+    if (!currentHeader) continue;
+
+    // The legitimate owner is the range whose old name matches the current header
+    const owner = rangeIds.find((id) => oldColumns[id] === currentHeader);
+
+    for (const id of rangeIds) {
+      if (id !== owner) {
+        orphanedRanges.add(id);
+      }
+    }
+
+    // If no range matches by old name, use a deterministic tiebreaker (sorted)
+    // so repeated syncs don't flip between survivors.
+    if (!owner) {
+      const sorted = [...rangeIds].sort();
+      orphanedRanges.delete(sorted[0]!);
+      for (let i = 1; i < sorted.length; i++) {
+        orphanedRanges.add(sorted[i]!);
+      }
+    }
+  }
+
   // --- Pass 1: Process all named ranges found in the sheet ---
   for (const [rangeId, colIndex] of sheetRanges) {
+    // Skip orphaned ranges (shifted from deleted columns)
+    if (orphanedRanges.has(rangeId)) {
+      const oldName = oldColumns[rangeId];
+      messages.push(
+        `✗ "${oldName ?? rangeId}" (${rangeId}) → orphaned (shifted from deleted column), removing`,
+      );
+      configChanged = true;
+      continue;
+    }
+
     const currentHeader = headers[colIndex];
 
     if (!currentHeader) {
@@ -243,5 +293,25 @@ export async function reconcile(
     tabConfig,
     messages,
     configChanged,
+    orphanedRanges: [...orphanedRanges],
   };
+}
+
+/**
+ * Delete orphaned named ranges from the sheet after config has been saved.
+ * Call this after writeConfig() to ensure consistent state — if range deletion
+ * fails, the config is already correct and the next sync will retry.
+ */
+export async function cleanupOrphanedRanges(
+  adapter: SheetsAdapter,
+  ref: SheetRef,
+  orphanedRanges: string[],
+): Promise<void> {
+  for (const rangeId of orphanedRanges) {
+    try {
+      await adapter.deleteColumnRange(ref, rangeId);
+    } catch {
+      // Non-fatal — range will be cleaned up on the next sync
+    }
+  }
 }
