@@ -219,6 +219,39 @@ Run a shell command and capture stdout. Template values are shell-escaped.
 }
 ```
 
+### lookup
+
+Read data from another tab by matching a column value.
+
+```json
+{
+  "id": "get_email",
+  "type": "lookup",
+  "target": "email",
+  "sourceTab": "Contacts",
+  "matchColumn": "Domain",
+  "matchValue": "{{row.domain}}",
+  "matchOperator": "equals",
+  "returnColumn": "Email",
+  "matchMode": "first"
+}
+```
+
+### write
+
+Write or append data to another tab. Supports array expansion for one-to-many mappings.
+
+```json
+{
+  "id": "archive_lead",
+  "type": "write",
+  "target": "archive_status",
+  "destTab": "Archive",
+  "columns": { "Name": "{{row.name}}", "Email": "{{row.email}}" },
+  "mode": "append"
+}
+```
+
 ### Error handling
 
 Actions can define `onError` to map HTTP status codes (or exit codes for exec) to behaviors:
@@ -228,6 +261,41 @@ Actions can define `onError` to map HTTP status codes (or exit codes for exec) t
 | `"skip"` | Skip this action for the current row |
 | `"stop_provider"` | Stop the current waterfall provider, try the next |
 | `{"write": "value"}` | Write a fallback value to the target cell |
+
+## Google Sheets Sidebar
+
+Rowbound includes an Apps Script sidebar that lets you configure actions directly in Google Sheets — no CLI needed. Click a column, edit the action config in a sidebar UI, and save. The sidebar reads and writes the same Developer Metadata config as the CLI, so both stay in sync.
+
+### Setup
+
+1. Open your Google Sheet → **Extensions → Apps Script**
+2. Replace the contents of `Code.gs` with [`apps-script/Code.gs`](apps-script/Code.gs)
+3. Click **+** next to Files → **HTML** → name it `Sidebar` → paste [`apps-script/Sidebar.html`](apps-script/Sidebar.html)
+4. In the left panel, click **+** next to **Services** → select **Google Sheets API** → set Identifier to `Sheets` → click **Add**
+5. Press **Cmd+S** (or Ctrl+S) to save
+6. Reload your spreadsheet — a **Rowbound** menu appears in the menu bar
+
+### Usage
+
+- **Rowbound → Actions** — view all configured actions, reorder them, or create new ones
+- **Rowbound → Settings** — edit pipeline settings (concurrency, rate limit, retries, backoff)
+- Click any action to edit its full config: type, run conditions, request details, headers, extract path, error handling
+- The column dropdown (●/○ indicators) lets you navigate between columns and see which ones have actions
+
+### Supported action types
+
+All action types are configurable through the sidebar: HTTP, Waterfall, Transform, Exec, Lookup, and Write. The sidebar covers every field the CLI supports.
+
+> **Note:** The sidebar is a config editor only — it doesn't execute the pipeline. Use `rowbound run` via the CLI to execute. The `exec` action type can be configured in the sidebar but only executes via the CLI (no shell access in Apps Script).
+
+### Multi-sheet use
+
+To use the sidebar across multiple sheets, repeat the setup steps for each sheet. Alternatively, you can set up a test deployment:
+
+1. In the Apps Script editor → **Deploy → Test deployments**
+2. Click the gear icon → select **Editor Add-on**
+3. Click **Create new test** → select any sheet as test document → **Save test**
+4. The add-on will be available in your test document; for other sheets, repeat the paste-in setup
 
 ## Development
 

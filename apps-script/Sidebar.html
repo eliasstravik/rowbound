@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════════════════════════════════════ */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 13px;
+  color: #202124;
+  background: #fff;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT
+   ═══════════════════════════════════════════════════════════════════════════ */
+#header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #dadce0;
+  background: #fff;
+  flex-shrink: 0;
+}
+#header-title {
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#header-nav {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#header-nav select {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #fff;
+}
+#content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+#footer {
+  padding: 10px 16px;
+  border-top: 1px solid #dadce0;
+  background: #fff;
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.spacer { flex: 1; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SECTIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+.section {
+  margin-bottom: 20px;
+}
+.section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #5f6368;
+  margin-bottom: 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #e8eaed;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORM FIELDS
+   ═══════════════════════════════════════════════════════════════════════════ */
+.field {
+  margin-bottom: 12px;
+}
+.field-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #5f6368;
+  margin-bottom: 4px;
+}
+.field-hint {
+  font-size: 11px;
+  color: #80868b;
+  margin-top: 3px;
+}
+.field-input, .field-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  background: #fff;
+}
+.field-input:focus, .field-select:focus, .field-textarea:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 1px #1a73e8;
+}
+.field-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', 'Roboto Mono', Consolas, monospace;
+  font-size: 12px;
+  min-height: 56px;
+  resize: vertical;
+  outline: none;
+  line-height: 1.5;
+}
+.field-row {
+  display: flex;
+  gap: 8px;
+}
+.field-row .field { flex: 1; margin-bottom: 0; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KEY-VALUE LISTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+.kv-list { margin-top: 4px; }
+.kv-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+.kv-row input {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-size: 12px;
+  outline: none;
+}
+.kv-row input:focus { border-color: #1a73e8; }
+.kv-remove {
+  width: 24px; height: 24px;
+  border: none; background: transparent;
+  cursor: pointer; color: #5f6368;
+  font-size: 16px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.kv-remove:hover { background: #fce8e6; color: #d93025; }
+.kv-add {
+  font-size: 12px; color: #1a73e8; cursor: pointer;
+  background: none; border: none; padding: 4px 0; font-weight: 500;
+}
+.kv-add:hover { text-decoration: underline; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+.btn {
+  padding: 8px 16px; border-radius: 4px; font-size: 13px;
+  font-weight: 500; cursor: pointer; border: none;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.btn:disabled { opacity: 0.5; cursor: default; }
+.btn-primary { background: #1a73e8; color: white; }
+.btn-primary:hover:not(:disabled) { background: #1557b0; }
+.btn-secondary { background: #fff; color: #3c4043; border: 1px solid #dadce0; }
+.btn-secondary:hover:not(:disabled) { background: #f8f9fa; }
+.btn-danger { background: #fff; color: #d93025; border: 1px solid #dadce0; }
+.btn-danger:hover:not(:disabled) { background: #fce8e6; }
+.btn-text {
+  background: transparent; color: #1a73e8; border: none;
+  padding: 4px 8px; font-size: 12px; cursor: pointer; font-weight: 500;
+}
+.btn-text:hover { text-decoration: underline; }
+.btn-icon {
+  background: transparent; border: none; cursor: pointer;
+  padding: 4px; border-radius: 4px; color: #5f6368;
+  display: flex; align-items: center;
+}
+.btn-icon:hover { background: #f1f3f4; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BADGES
+   ═══════════════════════════════════════════════════════════════════════════ */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 12px;
+  font-size: 11px; font-weight: 500; text-transform: uppercase;
+}
+.badge-http      { background: #e8f0fe; color: #1a73e8; }
+.badge-waterfall { background: #e6f4ea; color: #188038; }
+.badge-transform { background: #fef7e0; color: #ea8600; }
+.badge-exec      { background: #fce8e6; color: #d93025; }
+.badge-lookup    { background: #f3e8fd; color: #8430ce; }
+.badge-write     { background: #e0f7fa; color: #00796b; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OVERVIEW LIST
+   ═══════════════════════════════════════════════════════════════════════════ */
+.action-item {
+  padding: 12px; border: 1px solid #dadce0; border-radius: 8px;
+  margin-bottom: 8px; cursor: pointer;
+}
+.action-item:hover { background: #f8f9fa; }
+.action-item-header {
+  display: flex; align-items: center; gap: 8px;
+}
+.action-item-title { font-weight: 500; flex: 1; }
+.action-item-meta {
+  font-size: 12px; color: #5f6368; margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.action-item-reorder {
+  display: flex; flex-direction: column; gap: 0; margin-left: 4px;
+}
+.action-item-reorder button {
+  background: none; border: none; cursor: pointer; padding: 0 2px;
+  font-size: 10px; color: #5f6368; line-height: 1;
+}
+.action-item-reorder button:hover { color: #1a73e8; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PROVIDER CARDS (WATERFALL)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.provider-card {
+  border: 1px solid #dadce0; border-radius: 6px;
+  margin-bottom: 10px; overflow: hidden;
+}
+.provider-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px; background: #f8f9fa; border-bottom: 1px solid #e8eaed;
+  font-size: 12px; font-weight: 500;
+}
+.provider-body { padding: 12px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MISC
+   ═══════════════════════════════════════════════════════════════════════════ */
+.empty-state {
+  text-align: center; padding: 40px 20px; color: #5f6368;
+}
+.empty-state-title { font-size: 15px; font-weight: 500; color: #202124; margin-bottom: 8px; }
+.loading { text-align: center; padding: 60px 20px; color: #5f6368; }
+.toast {
+  position: fixed; bottom: 60px; left: 16px; right: 16px;
+  padding: 10px 16px; border-radius: 6px; font-size: 13px;
+  z-index: 100; animation: fadeIn 0.2s;
+}
+.toast-success { background: #188038; color: white; }
+.toast-error { background: #d93025; color: white; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.confirm-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+}
+.confirm-dialog {
+  background: white; border-radius: 8px; padding: 24px;
+  max-width: 280px; width: 100%;
+}
+.confirm-dialog h3 { margin-bottom: 8px; }
+.confirm-dialog p { color: #5f6368; margin-bottom: 16px; font-size: 13px; }
+.confirm-dialog-btns { display: flex; gap: 8px; justify-content: flex-end; }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="header"></div>
+  <div id="content"><div class="loading">Loading&#8230;</div></div>
+  <div id="footer"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+var state = {
+  config: null,
+  columnInfo: null,
+  tabs: [],
+  view: 'loading',
+  editingAction: null,
+  originalAction: null
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** HTML-escape a string for safe insertion into markup. */
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/**
+ * Safe DOM-based HTML setter.  Parses the markup in a detached document so
+ * inline scripts are never executed, then moves the resulting nodes into the
+ * target element.  This provides the convenience of HTML templates without the
+ * XSS risk of raw innerHTML on user-supplied data (all dynamic values are
+ * escaped via esc() before they reach this function).
+ */
+function safeSetHTML(el, html) {
+  var doc = new DOMParser().parseFromString(html, 'text/html');
+  el.textContent = '';                        // clear existing children
+  while (doc.body.firstChild) {
+    el.appendChild(document.adoptNode(doc.body.firstChild));
+  }
+}
+
+function getTabConfig() {
+  if (!state.config || !state.columnInfo) return null;
+  var c = state.config;
+  if (c.tabs) return c.tabs[state.columnInfo.tabGid] || null;
+  return null;
+}
+
+function getActions() {
+  if (!state.config) return [];
+  var tc = getTabConfig();
+  if (tc && tc.actions) return tc.actions;
+  return state.config.actions || [];
+}
+
+function setActions(actions) {
+  if (!state.config) return;
+  var c = state.config;
+  if (c.tabs && state.columnInfo) {
+    var gid = state.columnInfo.tabGid;
+    if (!c.tabs[gid]) {
+      c.tabs[gid] = { name: state.columnInfo.tabName, columns: {}, actions: [] };
+    }
+    c.tabs[gid].actions = actions;
+  } else {
+    c.actions = actions;
+  }
+}
+
+/** Resolve a range ID to a human-readable column header name. */
+function resolveColumnName(target) {
+  var tc = getTabConfig();
+  if (tc && tc.columns && tc.columns[target]) return tc.columns[target];
+  return target;
+}
+
+/** Given a header name, find its range ID (if any). */
+function resolveColumnId(headerName) {
+  var tc = getTabConfig();
+  if (tc && tc.columns) {
+    var keys = Object.keys(tc.columns);
+    for (var i = 0; i < keys.length; i++) {
+      if (tc.columns[keys[i]] === headerName) return keys[i];
+    }
+  }
+  return headerName;
+}
+
+function findActionByTarget(col) {
+  var actions = getActions();
+  var colId = resolveColumnId(col);
+  for (var i = 0; i < actions.length; i++) {
+    var t = actions[i].target;
+    if (t === col || t === colId || resolveColumnName(t) === col) return actions[i];
+  }
+  return null;
+}
+
+function generateId(col, type) {
+  return type + '_' + col.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
+
+function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+function actionSummary(a) {
+  switch (a.type) {
+    case 'http': return (a.method || 'GET') + ' ' + (a.url || '');
+    case 'waterfall': return (a.providers ? a.providers.length : 0) + ' providers';
+    case 'transform': return a.expression || '';
+    case 'exec': return a.command || '';
+    case 'lookup': return (a.sourceTab || '?') + ' \u2192 ' + (a.returnColumn || '?');
+    case 'write': return (a.mode || 'append') + ' \u2192 ' + (a.destTab || '?');
+    default: return '';
+  }
+}
+
+/** Replace row['rangeId'] references in when/url strings with human-readable names. */
+function humanizeExpression(expr) {
+  if (!expr) return '';
+  return expr.replace(/row\['([a-f0-9]+)'\]/g, function(match, id) {
+    var name = resolveColumnName(id);
+    return name !== id ? "row['" + name + "']" : match;
+  }).replace(/row\["([a-f0-9]+)"\]/g, function(match, id) {
+    var name = resolveColumnName(id);
+    return name !== id ? 'row["' + name + '"]' : match;
+  });
+}
+
+function showToast(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast toast-' + (type || 'success');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function() { el.remove(); }, 2500);
+}
+
+function ensureConfig() {
+  if (!state.config) {
+    state.config = {
+      version: '2',
+      tabs: {},
+      actions: [],
+      settings: { concurrency: 1, rateLimit: 5, retryAttempts: 2, retryBackoff: 'exponential' }
+    };
+    if (state.columnInfo) {
+      state.config.tabs[state.columnInfo.tabGid] = {
+        name: state.columnInfo.tabName,
+        columns: {},
+        actions: []
+      };
+    }
+  }
+  if (!state.config.settings) {
+    state.config.settings = { concurrency: 1, rateLimit: 5, retryAttempts: 2, retryBackoff: 'exponential' };
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SERVER API
+   ═══════════════════════════════════════════════════════════════════════════ */
+function serverCall(fn, arg, cb) {
+  var runner = google.script.run
+    .withSuccessHandler(function(r) { if (cb) cb(null, r); })
+    .withFailureHandler(function(e) { if (cb) cb(e); });
+  if (arg !== undefined) runner[fn](arg); else runner[fn]();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDER HEADER
+   ═══════════════════════════════════════════════════════════════════════════ */
+function renderHeader(title, opts) {
+  opts = opts || {};
+  var h = '<div id="header-title">';
+  if (opts.back) {
+    h += '<button class="btn-icon" onclick="' + esc(opts.back) + '" title="Back">&#8592;</button>';
+  }
+  h += '<span>' + esc(title) + '</span>';
+  if (opts.showSettings) {
+    h += '<span class="spacer"></span>';
+    h += '<button class="btn-icon" onclick="showSettings()" title="Settings">&#9881;</button>';
+  }
+  h += '</div>';
+
+  if (opts.columnSelect && state.columnInfo) {
+    var actions = getActions();
+    var configured = {};
+    for (var i = 0; i < actions.length; i++) configured[actions[i].target] = true;
+    h += '<div id="header-nav"><select onchange="switchColumn(this.value)">';
+    var headers = state.columnInfo.headers || [];
+    for (var j = 0; j < headers.length; j++) {
+      var hdr = headers[j];
+      var sel = (hdr === state.columnInfo.column) ? ' selected' : '';
+      var dot = configured[hdr] ? '\u25cf ' : '\u25cb ';
+      h += '<option value="' + esc(hdr) + '"' + sel + '>' + dot + esc(hdr) + '</option>';
+    }
+    h += '</select></div>';
+  }
+
+  safeSetHTML(document.getElementById('header'), h);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RENDER FOOTER
+   ═══════════════════════════════════════════════════════════════════════════ */
+function renderFooter(buttons) {
+  var h = '';
+  for (var i = 0; i < buttons.length; i++) {
+    var b = buttons[i];
+    if (b === 'spacer') { h += '<span class="spacer"></span>'; continue; }
+    h += '<button class="btn ' + (b.cls || '') + '" onclick="' + esc(b.action) + '">' +
+         esc(b.label) + '</button>';
+  }
+  safeSetHTML(document.getElementById('footer'), h);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VIEW: OVERVIEW
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showOverview() {
+  state.view = 'overview';
+  renderHeader('All Actions', { showSettings: true });
+
+  var actions = getActions();
+  var h = '';
+  if (actions.length === 0) {
+    h += '<div class="empty-state">';
+    h += '<div class="empty-state-title">No actions configured</div>';
+    h += '<p>Select a column and add an action to get started.</p>';
+    h += '</div>';
+  } else {
+    for (var i = 0; i < actions.length; i++) {
+      var a = actions[i];
+      h += '<div class="action-item" onclick="editActionByIndex(' + i + ')">';
+      h += '<div class="action-item-header">';
+      h += '<span class="badge badge-' + esc(a.type) + '">' + esc(a.type) + '</span>';
+      h += '<span class="action-item-title">' + esc(resolveColumnName(a.target)) + '</span>';
+      h += '<div class="action-item-reorder">';
+      if (i > 0) h += '<button onclick="event.stopPropagation();moveAction(' + i + ',-1)" title="Move up">&#9650;</button>';
+      if (i < actions.length - 1) h += '<button onclick="event.stopPropagation();moveAction(' + i + ',1)" title="Move down">&#9660;</button>';
+      h += '</div></div>';
+      h += '<div class="action-item-meta">' + esc(actionSummary(a)) + '</div>';
+      if (a.when) h += '<div class="action-item-meta">if: ' + esc(humanizeExpression(a.when)) + '</div>';
+      h += '</div>';
+    }
+  }
+  safeSetHTML(document.getElementById('content'), h);
+  renderFooter([
+    { label: 'Settings', cls: 'btn-text', action: 'showSettings()' },
+    'spacer',
+    { label: '+ New Action', cls: 'btn-primary', action: 'showCreate()' }
+  ]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VIEW: SETTINGS
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showSettings() {
+  state.view = 'settings';
+  renderHeader('Pipeline Settings', { back: 'showOverview()' });
+  ensureConfig();
+  var s = state.config.settings || {};
+
+  var h = '<div class="section"><div class="section-title">Execution</div>';
+  h += field('Concurrency', '<input class="field-input" type="number" min="1" name="concurrency" value="' + esc(s.concurrency || 1) + '">', 'Number of rows to process in parallel');
+  h += field('Rate Limit', '<input class="field-input" type="number" min="0" step="0.1" name="rateLimit" value="' + esc(s.rateLimit || 5) + '">', 'Max requests per second');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Retries</div>';
+  h += field('Retry Attempts', '<input class="field-input" type="number" min="0" name="retryAttempts" value="' + esc(s.retryAttempts || 2) + '">');
+  h += field('Backoff Strategy', '<select class="field-select" name="retryBackoff">' +
+    opt('exponential', s.retryBackoff) + opt('linear', s.retryBackoff) + opt('fixed', s.retryBackoff) +
+    '</select>');
+  h += '</div>';
+
+  safeSetHTML(document.getElementById('content'), h);
+  renderFooter([
+    { label: 'Cancel', cls: 'btn-secondary', action: 'showOverview()' },
+    'spacer',
+    { label: 'Save', cls: 'btn-primary', action: 'saveSettings()' }
+  ]);
+}
+
+function saveSettings() {
+  ensureConfig();
+  state.config.settings = {
+    concurrency: parseInt(getVal('concurrency')) || 1,
+    rateLimit: parseFloat(getVal('rateLimit')) || 5,
+    retryAttempts: parseInt(getVal('retryAttempts')) || 2,
+    retryBackoff: getVal('retryBackoff') || 'exponential'
+  };
+  persistConfig('Settings saved');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VIEW: EDITOR
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showEditor(action, columnName) {
+  state.view = 'editor';
+  state.editingAction = deepCopy(action);
+  state.originalAction = deepCopy(action);
+  if (columnName) state.columnInfo.column = columnName;
+
+  renderHeader(resolveColumnName(action.target), { back: 'showOverview()', columnSelect: true });
+  renderEditorContent();
+  renderFooter([
+    { label: 'Delete', cls: 'btn-danger', action: 'confirmDelete()' },
+    'spacer',
+    { label: 'Cancel', cls: 'btn-secondary', action: 'cancelEdit()' },
+    { label: 'Save', cls: 'btn-primary', action: 'saveAction()' }
+  ]);
+}
+
+function renderEditorContent() {
+  var a = state.editingAction;
+  var h = '';
+
+  // Action ID & Type
+  h += '<div class="section"><div class="section-title">Action</div>';
+  h += field('ID', '<input class="field-input" name="id" value="' + esc(a.id) + '">', 'Unique identifier for this action');
+  h += field('Type', buildTypeSelect(a.type));
+  h += '</div>';
+
+  // Run conditions
+  h += '<div class="section"><div class="section-title">Run Conditions</div>';
+  h += field('Only run if', '<textarea class="field-textarea" name="when" placeholder="e.g. row.domain !== &#39;&#39;">' + esc(a.when || '') + '</textarea>',
+    'JavaScript expression. Use row.column for cell values.');
+  h += '</div>';
+
+  // Type-specific fields
+  h += buildTypeFields(a);
+
+  safeSetHTML(document.getElementById('content'), h);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VIEW: CREATE
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showCreate(columnName) {
+  state.view = 'create';
+  var col = columnName || (state.columnInfo ? state.columnInfo.column : 'new_column');
+  if (state.columnInfo) state.columnInfo.column = col;
+  var a = { id: generateId(col, 'http'), type: 'http', target: col, method: 'GET', url: '', extract: '' };
+  state.editingAction = a;
+  state.originalAction = null;
+
+  renderHeader('New Action: ' + col, { back: 'showOverview()', columnSelect: true });
+  renderEditorContent();
+  renderFooter([
+    { label: 'Cancel', cls: 'btn-secondary', action: 'cancelEdit()' },
+    'spacer',
+    { label: 'Create', cls: 'btn-primary', action: 'saveAction()' }
+  ]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VIEW: COLUMN (auto-detect)
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showColumn(columnName) {
+  var col = columnName || (state.columnInfo ? state.columnInfo.column : '');
+  if (!col) { showOverview(); return; }
+  state.columnInfo.column = col;
+  var action = findActionByTarget(col);
+  if (action) {
+    showEditor(action, col);
+  } else {
+    showCreatePrompt(col);
+  }
+}
+
+function showCreatePrompt(col) {
+  state.view = 'create';
+  renderHeader(col, { back: 'showOverview()', columnSelect: true });
+  var h = '<div class="empty-state">';
+  h += '<div class="empty-state-title">No action for &quot;' + esc(col) + '&quot;</div>';
+  h += '<p>This column has no enrichment action configured yet.</p>';
+  h += '<br><button class="btn btn-primary" onclick="showCreate(\'' + esc(col).replace(/'/g, "\\'") + '\')">+ Create Action</button>';
+  h += '</div>';
+  safeSetHTML(document.getElementById('content'), h);
+  renderFooter([]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPE-SPECIFIC FORM BUILDERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+function buildTypeSelect(current) {
+  var types = ['http', 'waterfall', 'transform', 'exec', 'lookup', 'write'];
+  var h = '<select class="field-select" name="type" onchange="onTypeChange(this.value)">';
+  for (var i = 0; i < types.length; i++) {
+    h += '<option value="' + types[i] + '"' + (types[i] === current ? ' selected' : '') + '>' +
+         types[i].charAt(0).toUpperCase() + types[i].slice(1) + '</option>';
+  }
+  return h + '</select>';
+}
+
+function buildTypeFields(a) {
+  switch (a.type) {
+    case 'http': return buildHttpFields(a);
+    case 'waterfall': return buildWaterfallFields(a);
+    case 'transform': return buildTransformFields(a);
+    case 'exec': return buildExecFields(a);
+    case 'lookup': return buildLookupFields(a);
+    case 'write': return buildWriteFields(a);
+    default: return '';
+  }
+}
+
+function buildHttpFields(a) {
+  var h = '<div class="section"><div class="section-title">Request</div>';
+  h += '<div class="field-row">';
+  h += '<div class="field">' + fieldLabel('Method');
+  h += '<select class="field-select" name="method">' +
+    opt('GET', a.method) + opt('POST', a.method) + opt('PUT', a.method) +
+    opt('PATCH', a.method) + opt('DELETE', a.method) + '</select></div>';
+  h += '</div>';
+  h += field('URL', '<input class="field-input" name="url" value="' + esc(a.url || '') + '" placeholder="https://api.example.com/{{row.domain}}">', 'Supports {{row.column}} and {{env.VAR}} templates');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Headers</div>';
+  h += buildKvList('headers', a.headers || {}, 'Header', 'Value');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Body</div>';
+  h += field('Request Body', '<textarea class="field-textarea" name="body" placeholder="JSON body (optional)">' +
+    esc(a.body ? JSON.stringify(a.body, null, 2) : '') + '</textarea>', 'JSON format. Supports templates.');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Response</div>';
+  h += field('Extract (JSONPath)', '<input class="field-input" name="extract" value="' + esc(a.extract || '') + '" placeholder="$.data.name">',
+    'JSONPath expression to extract value from response');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Error Handling</div>';
+  h += buildKvList('onError', flattenOnError(a.onError), 'HTTP Code', 'Action (skip / retry)');
+  h += '</div>';
+
+  return h;
+}
+
+function buildWaterfallFields(a) {
+  var providers = a.providers || [];
+  var h = '<div class="section"><div class="section-title">Providers</div>';
+  h += '<p class="field-hint" style="margin-bottom:10px">Tried in order until one returns a result.</p>';
+  h += '<div id="providers-list">';
+  for (var i = 0; i < providers.length; i++) {
+    h += buildProviderCard(providers[i], i);
+  }
+  h += '</div>';
+  h += '<button class="kv-add" onclick="addProvider()">+ Add Provider</button>';
+  h += '</div>';
+  return h;
+}
+
+function buildProviderCard(p, idx) {
+  var h = '<div class="provider-card" data-idx="' + idx + '">';
+  h += '<div class="provider-header"><span>' + esc(p.name || 'Provider ' + (idx + 1)) + '</span>';
+  h += '<button class="kv-remove" onclick="removeProvider(' + idx + ')" title="Remove">&#215;</button></div>';
+  h += '<div class="provider-body">';
+  h += field('Name', '<input class="field-input" name="p_name_' + idx + '" value="' + esc(p.name || '') + '" placeholder="e.g. hunter">');
+  h += '<div class="field-row">';
+  h += '<div class="field">' + fieldLabel('Method');
+  h += '<select class="field-select" name="p_method_' + idx + '">' +
+    opt('GET', p.method) + opt('POST', p.method) + opt('PUT', p.method) + '</select></div>';
+  h += '</div>';
+  h += field('URL', '<input class="field-input" name="p_url_' + idx + '" value="' + esc(p.url || '') + '" placeholder="https://...">');
+  h += field('Extract', '<input class="field-input" name="p_extract_' + idx + '" value="' + esc(p.extract || '') + '" placeholder="$.result">');
+  h += '<details style="margin-top:8px"><summary class="field-label" style="cursor:pointer">Headers &amp; Error Handling</summary>';
+  h += '<div style="margin-top:8px">';
+  h += buildKvList('p_headers_' + idx, p.headers || {}, 'Header', 'Value');
+  h += '<div style="margin-top:8px">';
+  h += buildKvList('p_onError_' + idx, flattenOnError(p.onError), 'Code', 'Action');
+  h += '</div></div></details>';
+  h += '</div></div>';
+  return h;
+}
+
+function buildTransformFields(a) {
+  var h = '<div class="section"><div class="section-title">Expression</div>';
+  h += field('JavaScript Expression',
+    '<textarea class="field-textarea" name="expression" rows="3" placeholder="`${row.first_name} ${row.last_name}`">' +
+    esc(a.expression || '') + '</textarea>',
+    'Compute a new value. Access row data via row.column_name');
+  h += '</div>';
+  return h;
+}
+
+function buildExecFields(a) {
+  var h = '<div class="section"><div class="section-title">Command</div>';
+  h += field('Shell Command',
+    '<textarea class="field-textarea" name="command" placeholder="whois {{row.domain}} | grep Registrar:">' +
+    esc(a.command || '') + '</textarea>',
+    'Template values are shell-escaped. Note: exec only works via CLI, not in Google Sheets.');
+  h += field('Extract (JSONPath)', '<input class="field-input" name="extract" value="' + esc(a.extract || '') + '" placeholder="Optional \u2014 extract from JSON output">');
+  h += field('Timeout (ms)', '<input class="field-input" type="number" name="timeout" value="' + esc(a.timeout || 10000) + '">');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Error Handling</div>';
+  h += buildKvList('onError', flattenOnError(a.onError), 'Code', 'Action');
+  h += '</div>';
+  return h;
+}
+
+function buildLookupFields(a) {
+  var h = '<div class="section"><div class="section-title">Source</div>';
+  h += field('Source Tab', buildTabSelect('sourceTab', a.sourceTab));
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Match</div>';
+  h += field('Match Column', '<input class="field-input" name="matchColumn" value="' + esc(a.matchColumn || '') + '" placeholder="Column header in source tab">');
+  h += field('Match Value', '<input class="field-input" name="matchValue" value="' + esc(a.matchValue || '') + '" placeholder="{{row.domain}}">',
+    'Template \u2014 compared against each row in match column');
+  h += field('Operator', '<select class="field-select" name="matchOperator">' +
+    opt('equals', a.matchOperator) + opt('contains', a.matchOperator) + '</select>');
+  h += field('Match Mode', '<select class="field-select" name="matchMode">' +
+    opt('first', a.matchMode) + opt('all', a.matchMode) + '</select>',
+    '"all" returns matches as a JSON array');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Return</div>';
+  h += field('Return Column', '<input class="field-input" name="returnColumn" value="' + esc(a.returnColumn || '') + '" placeholder="Column header to return">');
+  h += '</div>';
+  return h;
+}
+
+function buildWriteFields(a) {
+  var h = '<div class="section"><div class="section-title">Destination</div>';
+  h += field('Destination Tab', buildTabSelect('destTab', a.destTab));
+  h += field('Mode', '<select class="field-select" name="mode" onchange="toggleUpsert(this.value)">' +
+    opt('append', a.mode) + opt('upsert', a.mode) + '</select>');
+  h += '</div>';
+
+  h += '<div class="section" id="upsert-section" style="' + ((a.mode === 'upsert') ? '' : 'display:none') + '">';
+  h += '<div class="section-title">Upsert Match</div>';
+  var um = a.upsertMatch || {};
+  h += field('Match Column', '<input class="field-input" name="upsertMatch_column" value="' + esc(um.column || '') + '" placeholder="Column in destination tab">');
+  h += field('Match Value', '<input class="field-input" name="upsertMatch_value" value="' + esc(um.value || '') + '" placeholder="{{row.email}}">');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Column Mappings</div>';
+  h += buildKvList('columns', a.columns || {}, 'Dest Header', 'Value Template');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Array Expansion (optional)</div>';
+  h += field('Expand', '<input class="field-input" name="expand" value="' + esc(a.expand || '') + '" placeholder="{{row.contacts_json}}">',
+    'Template resolving to JSON array \u2014 creates one row per element');
+  h += field('Expand Path', '<input class="field-input" name="expandPath" value="' + esc(a.expandPath || '') + '" placeholder="$.items">',
+    'JSONPath to extract array from expanded value');
+  h += '</div>';
+  return h;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORM UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+function field(label, input, hint) {
+  var h = '<div class="field">' + fieldLabel(label) + input;
+  if (hint) h += '<div class="field-hint">' + esc(hint) + '</div>';
+  return h + '</div>';
+}
+
+function fieldLabel(label) {
+  return '<label class="field-label">' + esc(label) + '</label>';
+}
+
+function opt(value, current) {
+  return '<option value="' + esc(value) + '"' + (value === current ? ' selected' : '') + '>' +
+         esc(value) + '</option>';
+}
+
+function getVal(name) {
+  var el = document.querySelector('[name="' + name + '"]');
+  return el ? el.value : '';
+}
+
+function buildTabSelect(name, current) {
+  var h = '<select class="field-select" name="' + esc(name) + '">';
+  h += '<option value="">\u2014 Select tab \u2014</option>';
+  for (var i = 0; i < state.tabs.length; i++) {
+    var t = state.tabs[i];
+    h += '<option value="' + esc(t.name) + '"' + (t.name === current ? ' selected' : '') + '>' +
+         esc(t.name) + '</option>';
+  }
+  return h + '</select>';
+}
+
+function buildKvList(name, obj, keyLabel, valLabel) {
+  var h = '<div class="kv-list" data-kv="' + esc(name) + '">';
+  var keys = Object.keys(obj || {});
+  if (keys.length === 0) {
+    h += kvRowHtml('', '', keyLabel, valLabel);
+  } else {
+    for (var i = 0; i < keys.length; i++) {
+      var v = typeof obj[keys[i]] === 'object' ? JSON.stringify(obj[keys[i]]) : String(obj[keys[i]]);
+      h += kvRowHtml(keys[i], v, keyLabel, valLabel);
+    }
+  }
+  h += '<button class="kv-add" onclick="addKvRow(this, \'' + esc(keyLabel).replace(/'/g, "\\'") + '\', \'' + esc(valLabel).replace(/'/g, "\\'") + '\')">+ Add</button>';
+  h += '</div>';
+  return h;
+}
+
+function kvRowHtml(key, val, keyPh, valPh) {
+  return '<div class="kv-row">' +
+    '<input value="' + esc(key) + '" placeholder="' + esc(keyPh) + '" data-kv-key>' +
+    '<input value="' + esc(val) + '" placeholder="' + esc(valPh) + '" data-kv-val>' +
+    '<button class="kv-remove" onclick="removeKvRow(this)">&#215;</button></div>';
+}
+
+function addKvRow(btn, keyPh, valPh) {
+  var list = btn.parentElement;
+  var row = document.createElement('div');
+  row.className = 'kv-row';
+  var ki = document.createElement('input');
+  ki.placeholder = keyPh; ki.setAttribute('data-kv-key', '');
+  var vi = document.createElement('input');
+  vi.placeholder = valPh; vi.setAttribute('data-kv-val', '');
+  var rb = document.createElement('button');
+  rb.className = 'kv-remove'; rb.textContent = '\u00d7';
+  rb.onclick = function() { removeKvRow(rb); };
+  row.appendChild(ki); row.appendChild(vi); row.appendChild(rb);
+  list.insertBefore(row, btn);
+}
+
+function removeKvRow(btn) {
+  var row = btn.parentElement;
+  var list = row.parentElement;
+  row.remove();
+  if (list.querySelectorAll('.kv-row').length === 0) {
+    var addBtn = list.querySelector('.kv-add');
+    if (addBtn) addBtn.click();
+  }
+}
+
+function readKvList(name) {
+  var list = document.querySelector('[data-kv="' + name + '"]');
+  if (!list) return {};
+  var rows = list.querySelectorAll('.kv-row');
+  var result = {};
+  for (var i = 0; i < rows.length; i++) {
+    var k = rows[i].querySelector('[data-kv-key]').value.trim();
+    var v = rows[i].querySelector('[data-kv-val]').value.trim();
+    if (k) result[k] = v;
+  }
+  return result;
+}
+
+function flattenOnError(onError) {
+  if (!onError) return {};
+  var flat = {};
+  var keys = Object.keys(onError);
+  for (var i = 0; i < keys.length; i++) {
+    var v = onError[keys[i]];
+    flat[keys[i]] = (typeof v === 'object') ? JSON.stringify(v) : String(v);
+  }
+  return flat;
+}
+
+function parseOnError(flat) {
+  if (!flat || Object.keys(flat).length === 0) return undefined;
+  var result = {};
+  var keys = Object.keys(flat);
+  for (var i = 0; i < keys.length; i++) {
+    var v = flat[keys[i]];
+    try { result[keys[i]] = JSON.parse(v); } catch(e) { result[keys[i]] = v; }
+  }
+  return result;
+}
+
+function toggleUpsert(mode) {
+  var el = document.getElementById('upsert-section');
+  if (el) el.style.display = (mode === 'upsert') ? '' : 'none';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   READ FORM -> ACTION OBJECT
+   ═══════════════════════════════════════════════════════════════════════════ */
+function readFormAction() {
+  var type = getVal('type');
+  var a = {
+    id: getVal('id').trim() || generateId(state.columnInfo.column, type),
+    type: type,
+    target: state.columnInfo.column
+  };
+
+  var when = getVal('when').trim();
+  if (when) a.when = when;
+
+  switch (type) {
+    case 'http':
+      a.method = getVal('method') || 'GET';
+      a.url = getVal('url');
+      a.extract = getVal('extract');
+      var headers = readKvList('headers');
+      if (Object.keys(headers).length > 0) a.headers = headers;
+      var bodyStr = getVal('body').trim();
+      if (bodyStr) { try { a.body = JSON.parse(bodyStr); } catch(e) { a.body = bodyStr; } }
+      var onErr = parseOnError(readKvList('onError'));
+      if (onErr) a.onError = onErr;
+      break;
+
+    case 'waterfall':
+      a.providers = readProviders();
+      break;
+
+    case 'transform':
+      a.expression = getVal('expression');
+      break;
+
+    case 'exec':
+      a.command = getVal('command');
+      var ext = getVal('extract').trim();
+      if (ext) a.extract = ext;
+      var timeout = parseInt(getVal('timeout'));
+      if (timeout && timeout !== 10000) a.timeout = timeout;
+      var execErr = parseOnError(readKvList('onError'));
+      if (execErr) a.onError = execErr;
+      break;
+
+    case 'lookup':
+      a.sourceTab = getVal('sourceTab');
+      a.matchColumn = getVal('matchColumn');
+      a.matchValue = getVal('matchValue');
+      var mOp = getVal('matchOperator');
+      if (mOp && mOp !== 'equals') a.matchOperator = mOp;
+      a.returnColumn = getVal('returnColumn');
+      var mMode = getVal('matchMode');
+      if (mMode && mMode !== 'first') a.matchMode = mMode;
+      break;
+
+    case 'write':
+      a.destTab = getVal('destTab');
+      var mode = getVal('mode');
+      if (mode && mode !== 'append') a.mode = mode;
+      a.columns = readKvList('columns');
+      if (mode === 'upsert') {
+        var uc = getVal('upsertMatch_column').trim();
+        var uv = getVal('upsertMatch_value').trim();
+        if (uc) a.upsertMatch = { column: uc, value: uv };
+      }
+      var expand = getVal('expand').trim();
+      if (expand) a.expand = expand;
+      var expandPath = getVal('expandPath').trim();
+      if (expandPath) a.expandPath = expandPath;
+      break;
+  }
+
+  return a;
+}
+
+function readProviders() {
+  var cards = document.querySelectorAll('.provider-card');
+  var providers = [];
+  for (var i = 0; i < cards.length; i++) {
+    var idx = cards[i].getAttribute('data-idx');
+    var p = {
+      name: getVal('p_name_' + idx) || ('Provider ' + (i + 1)),
+      method: getVal('p_method_' + idx) || 'GET',
+      url: getVal('p_url_' + idx) || '',
+      extract: getVal('p_extract_' + idx) || ''
+    };
+    var ph = readKvList('p_headers_' + idx);
+    if (Object.keys(ph).length > 0) p.headers = ph;
+    var pe = parseOnError(readKvList('p_onError_' + idx));
+    if (pe) p.onError = pe;
+    providers.push(p);
+  }
+  return providers;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EVENT HANDLERS
+   ═══════════════════════════════════════════════════════════════════════════ */
+function onTypeChange(newType) {
+  var a = state.editingAction;
+  // Preserve when and id from current form
+  a.when = getVal('when');
+  a.id = generateId(a.target, newType);
+  a.type = newType;
+  // Clear type-specific fields
+  delete a.method; delete a.url; delete a.headers; delete a.body;
+  delete a.extract; delete a.onError; delete a.providers;
+  delete a.expression; delete a.command; delete a.timeout;
+  delete a.sourceTab; delete a.matchColumn; delete a.matchValue;
+  delete a.matchOperator; delete a.returnColumn; delete a.matchMode;
+  delete a.destTab; delete a.columns; delete a.mode;
+  delete a.upsertMatch; delete a.expand; delete a.expandPath;
+  // Set defaults per type
+  if (newType === 'http') { a.method = 'GET'; a.url = ''; a.extract = ''; }
+  if (newType === 'waterfall') { a.providers = []; }
+  if (newType === 'transform') { a.expression = ''; }
+  if (newType === 'exec') { a.command = ''; }
+  if (newType === 'lookup') { a.sourceTab = ''; a.matchColumn = ''; a.matchValue = ''; a.returnColumn = ''; }
+  if (newType === 'write') { a.destTab = ''; a.columns = {}; }
+  renderEditorContent();
+}
+
+function switchColumn(col) {
+  state.columnInfo.column = col;
+  showColumn(col);
+}
+
+function editActionByIndex(idx) {
+  var actions = getActions();
+  if (idx >= 0 && idx < actions.length) {
+    var a = actions[idx];
+    var col = resolveColumnName(a.target);
+    state.columnInfo.column = col;
+    showEditor(a, col);
+  }
+}
+
+function moveAction(idx, dir) {
+  var actions = getActions();
+  var newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= actions.length) return;
+  var temp = actions[idx];
+  actions[idx] = actions[newIdx];
+  actions[newIdx] = temp;
+  setActions(actions);
+  persistConfig('Action reordered');
+  showOverview();
+}
+
+function saveAction() {
+  var newAction = readFormAction();
+  ensureConfig();
+  var actions = getActions();
+
+  var found = -1;
+  if (state.originalAction) {
+    for (var i = 0; i < actions.length; i++) {
+      if (actions[i].id === state.originalAction.id) { found = i; break; }
+    }
+  }
+
+  if (found >= 0) {
+    actions[found] = newAction;
+  } else {
+    actions.push(newAction);
+  }
+  setActions(actions);
+  persistConfig(found >= 0 ? 'Action updated' : 'Action created');
+  state.editingAction = deepCopy(newAction);
+  state.originalAction = deepCopy(newAction);
+}
+
+function cancelEdit() {
+  showColumn(state.columnInfo ? state.columnInfo.column : '');
+}
+
+function confirmDelete() {
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+
+  var dialog = document.createElement('div');
+  dialog.className = 'confirm-dialog';
+
+  var title = document.createElement('h3');
+  title.textContent = 'Delete Action';
+  var msg = document.createElement('p');
+  msg.textContent = 'Remove this action from the pipeline? This cannot be undone.';
+
+  var btns = document.createElement('div');
+  btns.className = 'confirm-dialog-btns';
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = function() { overlay.remove(); };
+
+  var deleteBtn = document.createElement('button');
+  deleteBtn.className = 'btn btn-danger';
+  deleteBtn.textContent = 'Delete';
+  deleteBtn.onclick = function() { doDelete(); };
+
+  btns.appendChild(cancelBtn);
+  btns.appendChild(deleteBtn);
+  dialog.appendChild(title);
+  dialog.appendChild(msg);
+  dialog.appendChild(btns);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+}
+
+function doDelete() {
+  var overlay = document.querySelector('.confirm-overlay');
+  if (overlay) overlay.remove();
+  if (!state.originalAction) { showOverview(); return; }
+  var actions = getActions();
+  var filtered = actions.filter(function(a) { return a.id !== state.originalAction.id; });
+  setActions(filtered);
+  persistConfig('Action deleted');
+  showOverview();
+}
+
+function addProvider() {
+  state.editingAction.providers = readProviders();
+  state.editingAction.providers.push({ name: '', method: 'GET', url: '', extract: '' });
+  state.editingAction.when = getVal('when');
+  state.editingAction.id = getVal('id');
+  renderEditorContent();
+}
+
+function removeProvider(idx) {
+  state.editingAction.providers = readProviders();
+  state.editingAction.providers.splice(idx, 1);
+  state.editingAction.when = getVal('when');
+  state.editingAction.id = getVal('id');
+  renderEditorContent();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PERSIST
+   ═══════════════════════════════════════════════════════════════════════════ */
+function persistConfig(message) {
+  serverCall('saveConfig', JSON.stringify(state.config), function(err) {
+    if (err) {
+      showToast('Error: ' + err.message, 'error');
+    } else {
+      showToast(message || 'Saved');
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   INITIALIZATION
+   ═══════════════════════════════════════════════════════════════════════════ */
+function init() {
+  serverCall('getInitData', undefined, function(err, data) {
+    if (err) {
+      safeSetHTML(document.getElementById('content'),
+        '<div class="empty-state"><div class="empty-state-title">Error loading</div>' +
+        '<p>' + esc(err.message || 'Unknown error') + '</p></div>');
+      return;
+    }
+    state.config = data.config;
+    state.columnInfo = data.columnInfo;
+    state.tabs = data.tabs || [];
+    ensureConfig();
+    switch (data.initialView) {
+      case 'overview': showOverview(); break;
+      case 'settings': showSettings(); break;
+      default: showColumn(); break;
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
