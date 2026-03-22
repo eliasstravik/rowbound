@@ -151,8 +151,10 @@ export interface PipelineSettings {
 /** Per-tab configuration (v2 multi-tab format) */
 export interface TabConfig {
   name: string;
+  enabled?: boolean; // default true — set to false to stop all processing
   columns: Record<string, string>; // { rangeId: headerName }
   actions: Action[];
+  settings?: PipelineSettings; // per-tab settings override
 }
 
 /** Top-level pipeline configuration */

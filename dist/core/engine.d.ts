@@ -17,6 +17,9 @@ export interface RunPipelineOptions {
     onRowComplete?: (rowIndex: number, updates: CellUpdate[]) => void;
     onActionComplete?: (rowIndex: number, actionId: string, value: string | null) => void;
     onError?: (rowIndex: number, actionId: string, error: Error) => void;
+    /** Called before each row to check if the tab is still enabled.
+     *  If it returns false, remaining rows are skipped. */
+    checkEnabled?: () => Promise<boolean>;
 }
 export interface RunResult {
     totalRows: number;

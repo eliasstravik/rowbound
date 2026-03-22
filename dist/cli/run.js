@@ -54,6 +54,10 @@ export function registerRun(program) {
                 await cleanupOrphanedRanges(adapter, ref, reconciled.orphanedRanges);
             }
             const tabConfig = reconciled.tabConfig;
+            if (tabConfig.enabled === false) {
+                logErr(warn("Tab is disabled. Skipping pipeline run."));
+                return;
+            }
             if (tabConfig.actions.length === 0) {
                 logErr(error("No actions configured.") +
                     " Add actions with 'rowbound config add-action'.");
@@ -87,6 +91,7 @@ export function registerRun(program) {
             const resolvedConfig = {
                 ...reconciled.config,
                 actions: tabConfig.actions,
+                settings: { ...reconciled.config.settings, ...(tabConfig.settings || {}) },
             };
             // Convert CLI row format to engine format
             let range;
@@ -148,6 +153,18 @@ export function registerRun(program) {
                 dryRun: opts.dryRun,
                 signal: controller.signal,
                 columnMap: tabConfig.columns,
+                checkEnabled: async () => {
+                    try {
+                        const freshConfig = await adapter.readConfig(ref);
+                        if (!freshConfig?.tabs)
+                            return true;
+                        const tab = freshConfig.tabs[reconciled.tabGid];
+                        return tab?.enabled !== false;
+                    }
+                    catch {
+                        return true;
+                    }
+                },
                 onTotalRows: (total) => {
                     totalRowsToProcess = total;
                 },

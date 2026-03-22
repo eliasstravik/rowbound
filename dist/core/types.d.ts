@@ -131,8 +131,10 @@ export interface PipelineSettings {
 /** Per-tab configuration (v2 multi-tab format) */
 export interface TabConfig {
     name: string;
+    enabled?: boolean;
     columns: Record<string, string>;
     actions: Action[];
+    settings?: PipelineSettings;
 }
 /** Top-level pipeline configuration */
 export interface PipelineConfig {

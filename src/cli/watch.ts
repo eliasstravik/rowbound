@@ -50,6 +50,7 @@ async function executePipelineRun(
   signal: AbortSignal,
   sheetId: string,
   sheetName?: string,
+  checkEnabled?: () => Promise<boolean>,
 ): Promise<RunResult> {
   // Reconcile column registry (detect renames, track new columns, migrate v1→v2)
   const reconciled = await reconcile(adapter, ref, config);
@@ -60,7 +61,11 @@ async function executePipelineRun(
     await cleanupOrphanedRanges(adapter, ref, reconciled.orphanedRanges);
   }
   const tabConfig = reconciled.tabConfig;
-  const resolvedConfig = { ...reconciled.config, actions: tabConfig.actions };
+  const resolvedConfig = {
+    ...reconciled.config,
+    actions: tabConfig.actions,
+    settings: { ...reconciled.config.settings, ...(tabConfig.settings || {}) },
+  };
 
   const runState = createRunState({
     sheetId,
@@ -78,6 +83,7 @@ async function executePipelineRun(
     env,
     signal,
     columnMap: tabConfig.columns,
+    checkEnabled,
     onRowStart: (rowIndex, row) => {
       tracker.onRowStart(rowIndex, row);
     },
@@ -197,6 +203,16 @@ export function registerWatch(program: Command): void {
             const freshConfig = await adapter.readConfig(ref);
             const activeConfig = freshConfig ?? config!;
 
+            // Check if tab is disabled
+            if (activeConfig.tabs) {
+              const tabEntries = Object.entries(activeConfig.tabs);
+              const matchingTab = tabEntries.find(([_, t]) => t.name === opts.tab);
+              if (matchingTab && matchingTab[1].enabled === false) {
+                console.log(`[${timestamp()}] Tab "${opts.tab}" is disabled, skipping run.`);
+                return null;
+              }
+            }
+
             // Rebuild env from fresh config so new env references are picked up
             const env = buildSafeEnv(activeConfig);
 
@@ -208,6 +224,16 @@ export function registerWatch(program: Command): void {
               controller.signal,
               sheetId,
               opts.tab,
+              async () => {
+                try {
+                  const cfg = await adapter.readConfig(ref);
+                  if (!cfg?.tabs) return true;
+                  const tabEntry = Object.entries(cfg.tabs).find(([_, t]) => t.name === opts.tab);
+                  return tabEntry ? tabEntry[1].enabled !== false : true;
+                } catch {
+                  return true;
+                }
+              },
             );
             return result;
           } finally {

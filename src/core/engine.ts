@@ -48,6 +48,9 @@ export interface RunPipelineOptions {
     value: string | null,
   ) => void;
   onError?: (rowIndex: number, actionId: string, error: Error) => void;
+  /** Called before each row to check if the tab is still enabled.
+   *  If it returns false, remaining rows are skipped. */
+  checkEnabled?: () => Promise<boolean>;
 }
 
 export interface RunResult {
@@ -277,6 +280,14 @@ export async function runPipeline(
   }
 
   for (const i of rowIndices) {
+    // Check if tab is still enabled (supports mid-run stop via config change)
+    if (options.checkEnabled) {
+      const enabled = await options.checkEnabled();
+      if (!enabled) {
+        break;
+      }
+    }
+
     // Check abort signal between rows
     if (signal?.aborted) {
       break;

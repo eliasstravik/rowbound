@@ -78,6 +78,11 @@ export function registerRun(program: Command): void {
 
           const tabConfig = reconciled.tabConfig;
 
+          if (tabConfig.enabled === false) {
+            logErr(warn("Tab is disabled. Skipping pipeline run."));
+            return;
+          }
+
           if (tabConfig.actions.length === 0) {
             logErr(
               error("No actions configured.") +
@@ -126,6 +131,7 @@ export function registerRun(program: Command): void {
           const resolvedConfig = {
             ...reconciled.config,
             actions: tabConfig.actions,
+            settings: { ...reconciled.config.settings, ...(tabConfig.settings || {}) },
           };
 
           // Convert CLI row format to engine format
@@ -202,6 +208,16 @@ export function registerRun(program: Command): void {
             dryRun: opts.dryRun,
             signal: controller.signal,
             columnMap: tabConfig.columns,
+            checkEnabled: async () => {
+              try {
+                const freshConfig = await adapter.readConfig(ref);
+                if (!freshConfig?.tabs) return true;
+                const tab = freshConfig.tabs[reconciled.tabGid];
+                return tab?.enabled !== false;
+              } catch {
+                return true;
+              }
+            },
             onTotalRows: (total) => {
               totalRowsToProcess = total;
             },

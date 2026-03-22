@@ -30,7 +30,7 @@ function createRateLimiter() {
 function timestamp() {
     return new Date().toLocaleTimeString("en-GB", { hour12: false });
 }
-async function executePipelineRun(adapter, ref, config, env, signal, sheetId, sheetName) {
+async function executePipelineRun(adapter, ref, config, env, signal, sheetId, sheetName, checkEnabled) {
     // Reconcile column registry (detect renames, track new columns, migrate v1→v2)
     const reconciled = await reconcile(adapter, ref, config);
     if (reconciled.configChanged) {
@@ -40,7 +40,11 @@ async function executePipelineRun(adapter, ref, config, env, signal, sheetId, sh
         await cleanupOrphanedRanges(adapter, ref, reconciled.orphanedRanges);
     }
     const tabConfig = reconciled.tabConfig;
-    const resolvedConfig = { ...reconciled.config, actions: tabConfig.actions };
+    const resolvedConfig = {
+        ...reconciled.config,
+        actions: tabConfig.actions,
+        settings: { ...reconciled.config.settings, ...(tabConfig.settings || {}) },
+    };
     const runState = createRunState({
         sheetId,
         sheetName,
@@ -56,6 +60,7 @@ async function executePipelineRun(adapter, ref, config, env, signal, sheetId, sh
         env,
         signal,
         columnMap: tabConfig.columns,
+        checkEnabled,
         onRowStart: (rowIndex, row) => {
             tracker.onRowStart(rowIndex, row);
         },
@@ -139,9 +144,29 @@ export function registerWatch(program) {
                 // Re-read config each tick so hot-reload of actions works
                 const freshConfig = await adapter.readConfig(ref);
                 const activeConfig = freshConfig ?? config;
+                // Check if tab is disabled
+                if (activeConfig.tabs) {
+                    const tabEntries = Object.entries(activeConfig.tabs);
+                    const matchingTab = tabEntries.find(([_, t]) => t.name === opts.tab);
+                    if (matchingTab && matchingTab[1].enabled === false) {
+                        console.log(`[${timestamp()}] Tab "${opts.tab}" is disabled, skipping run.`);
+                        return null;
+                    }
+                }
                 // Rebuild env from fresh config so new env references are picked up
                 const env = buildSafeEnv(activeConfig);
-                const result = await executePipelineRun(adapter, ref, activeConfig, env, controller.signal, sheetId, opts.tab);
+                const result = await executePipelineRun(adapter, ref, activeConfig, env, controller.signal, sheetId, opts.tab, async () => {
+                    try {
+                        const cfg = await adapter.readConfig(ref);
+                        if (!cfg?.tabs)
+                            return true;
+                        const tabEntry = Object.entries(cfg.tabs).find(([_, t]) => t.name === opts.tab);
+                        return tabEntry ? tabEntry[1].enabled !== false : true;
+                    }
+                    catch {
+                        return true;
+                    }
+                });
                 return result;
             }
             finally {

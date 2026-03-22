@@ -41,8 +41,10 @@ export async function reconcile(adapter, ref, config) {
         for (const [gid, tab] of Object.entries(config.tabs)) {
             tabs[gid] = {
                 name: tab.name,
+                ...(tab.enabled !== undefined ? { enabled: tab.enabled } : {}),
                 columns: { ...tab.columns },
                 actions: [...tab.actions],
+                ...(tab.settings ? { settings: { ...tab.settings } } : {}),
             };
         }
     }

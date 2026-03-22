@@ -159,6 +159,13 @@ export async function runPipeline(options) {
         console.warn(`Warning: concurrency is set to ${config.settings.concurrency} but parallel row processing is not yet implemented. All rows will be processed sequentially (concurrency=1).`);
     }
     for (const i of rowIndices) {
+        // Check if tab is still enabled (supports mid-run stop via config change)
+        if (options.checkEnabled) {
+            const enabled = await options.checkEnabled();
+            if (!enabled) {
+                break;
+            }
+        }
         // Check abort signal between rows
         if (signal?.aborted) {
             break;

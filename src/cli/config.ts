@@ -311,6 +311,8 @@ export function registerConfig(program: Command): void {
       "--retry-backoff <strategy>",
       "Backoff strategy (exponential, linear, fixed)",
     )
+    .option("--enabled", "Enable processing for this tab")
+    .option("--disabled", "Disable processing for this tab (stop button)")
     .option("--tab <name>", "Sheet tab name")
     .action(
       async (
@@ -321,6 +323,8 @@ export function registerConfig(program: Command): void {
           rateLimit?: string;
           retryAttempts?: string;
           retryBackoff?: string;
+          enabled?: boolean;
+          disabled?: boolean;
         },
       ) => {
         const adapter = new SheetsAdapter();
@@ -340,6 +344,33 @@ export function registerConfig(program: Command): void {
 
           const changes: string[] = [];
 
+          // Handle --enabled / --disabled for per-tab enabled flag
+          if (opts.enabled || opts.disabled) {
+            if (opts.enabled && opts.disabled) {
+              console.error(error("Cannot specify both --enabled and --disabled."));
+              process.exitCode = 1;
+              return;
+            }
+            const { gid, tab } = getTabConfig(existing, opts.tab);
+            if (existing.tabs) {
+              tab.enabled = opts.enabled ? true : false;
+              existing.tabs[gid] = tab;
+              changes.push(`enabled=${tab.enabled}`);
+            } else {
+              console.error(error("--enabled/--disabled requires a v2 config with tabs. Run 'rowbound sync' first."));
+              process.exitCode = 1;
+              return;
+            }
+          }
+
+          // Determine target for settings changes: per-tab (v2 + --tab) or global
+          const useTabSettings = opts.tab && existing.tabs;
+          let tabGid: string | undefined;
+          if (useTabSettings) {
+            const resolved = getTabConfig(existing, opts.tab);
+            tabGid = resolved.gid;
+          }
+
           if (opts.concurrency !== undefined) {
             const val = parseInt(opts.concurrency, 10);
             if (Number.isNaN(val) || val <= 0) {
@@ -347,8 +378,14 @@ export function registerConfig(program: Command): void {
               process.exitCode = 1;
               return;
             }
-            existing.settings.concurrency = val;
-            changes.push(`concurrency=${val}`);
+            if (useTabSettings && tabGid && existing.tabs) {
+              const tab = existing.tabs[tabGid]!;
+              tab.settings = { ...existing.settings, ...(tab.settings || {}), concurrency: val };
+              changes.push(`concurrency=${val} (tab)`);
+            } else {
+              existing.settings.concurrency = val;
+              changes.push(`concurrency=${val}`);
+            }
           }
 
           if (opts.rateLimit !== undefined) {
@@ -362,8 +399,14 @@ export function registerConfig(program: Command): void {
               process.exitCode = 1;
               return;
             }
-            existing.settings.rateLimit = val;
-            changes.push(`rateLimit=${val}`);
+            if (useTabSettings && tabGid && existing.tabs) {
+              const tab = existing.tabs[tabGid]!;
+              tab.settings = { ...existing.settings, ...(tab.settings || {}), rateLimit: val };
+              changes.push(`rateLimit=${val} (tab)`);
+            } else {
+              existing.settings.rateLimit = val;
+              changes.push(`rateLimit=${val}`);
+            }
           }
 
           if (opts.retryAttempts !== undefined) {
@@ -375,8 +418,14 @@ export function registerConfig(program: Command): void {
               process.exitCode = 1;
               return;
             }
-            existing.settings.retryAttempts = val;
-            changes.push(`retryAttempts=${val}`);
+            if (useTabSettings && tabGid && existing.tabs) {
+              const tab = existing.tabs[tabGid]!;
+              tab.settings = { ...existing.settings, ...(tab.settings || {}), retryAttempts: val };
+              changes.push(`retryAttempts=${val} (tab)`);
+            } else {
+              existing.settings.retryAttempts = val;
+              changes.push(`retryAttempts=${val}`);
+            }
           }
 
           if (opts.retryBackoff !== undefined) {
@@ -390,14 +439,20 @@ export function registerConfig(program: Command): void {
               process.exitCode = 1;
               return;
             }
-            existing.settings.retryBackoff = opts.retryBackoff;
-            changes.push(`retryBackoff=${opts.retryBackoff}`);
+            if (useTabSettings && tabGid && existing.tabs) {
+              const tab = existing.tabs[tabGid]!;
+              tab.settings = { ...existing.settings, ...(tab.settings || {}), retryBackoff: opts.retryBackoff };
+              changes.push(`retryBackoff=${opts.retryBackoff} (tab)`);
+            } else {
+              existing.settings.retryBackoff = opts.retryBackoff;
+              changes.push(`retryBackoff=${opts.retryBackoff}`);
+            }
           }
 
           if (changes.length === 0) {
             console.error(
               error(
-                "No settings specified. Use --concurrency, --rate-limit, --retry-attempts, or --retry-backoff.",
+                "No settings specified. Use --concurrency, --rate-limit, --retry-attempts, --retry-backoff, --enabled, or --disabled.",
               ),
             );
             process.exitCode = 1;
