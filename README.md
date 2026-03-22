@@ -88,6 +88,8 @@ Column names are automatically resolved to stable IDs when you run `rowbound syn
 - **MCP server** — expose all operations as Model Context Protocol tools for Claude Desktop and other AI assistants
 - **Run history** — track pipeline executions with per-action summaries, durations, and error logs
 - **Dry run** — preview what would change without writing to the sheet
+- **Per-tab stop/start** — enable or disable processing per tab; stops mid-run if toggled during execution
+- **Per-tab settings** — override concurrency, rate limit, retries, and backoff per tab
 - **BYOK** — bring your own API keys, pay only for the APIs you use
 
 ## CLI Commands
@@ -103,7 +105,7 @@ Column names are automatically resolved to stable IDs when you run `rowbound syn
 | `rowbound config add-action <sheetId>` | Add an action to the pipeline |
 | `rowbound config remove-action <sheetId>` | Remove an action by ID |
 | `rowbound config update-action <sheetId>` | Update an action (merge partial JSON) |
-| `rowbound config set <sheetId>` | Update pipeline settings (concurrency, rate limit, retry) |
+| `rowbound config set <sheetId>` | Update pipeline settings (`--enabled`, `--disabled`, `--concurrency`, `--rate-limit`, etc.) |
 | `rowbound config validate <sheetId>` | Validate the pipeline config |
 | `rowbound runs [runId]` | List recent runs or view a specific run |
 | `rowbound runs clear` | Delete all run history |
