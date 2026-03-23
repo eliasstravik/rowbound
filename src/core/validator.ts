@@ -2,9 +2,12 @@ import vm from "node:vm";
 import { JSONPath } from "jsonpath-plus";
 import type {
   ExecAction,
+  ExecSource,
   HttpAction,
+  HttpSource,
   LookupAction,
   PipelineConfig,
+  Source,
   TransformAction,
   WaterfallAction,
   WriteAction,
@@ -432,7 +435,101 @@ export function validateConfig(config: PipelineConfig): ValidationResult {
     }
   }
 
-  // 8. Config size warning
+  // 8. Source validation
+  const sources: Source[] = config.sources ?? [];
+  const sourceIds = new Set<string>();
+  const VALID_SOURCE_TYPES = new Set(["http", "exec", "webhook"]);
+  const VALID_SCHEDULES = new Set(["manual", "hourly", "daily", "weekly"]);
+
+  for (const source of sources) {
+    const label = `Source "${source.id}"`;
+
+    if (!source.id) {
+      errors.push("A source is missing the 'id' field");
+    }
+    if (sourceIds.has(source.id)) {
+      errors.push(`Duplicate source ID: ${source.id}`);
+    }
+    sourceIds.add(source.id);
+
+    if (!source.type || !VALID_SOURCE_TYPES.has(source.type)) {
+      errors.push(
+        `${label}: invalid type "${source.type}" (expected: http, exec, webhook)`,
+      );
+    }
+
+    if (
+      !source.columns ||
+      typeof source.columns !== "object" ||
+      Object.keys(source.columns).length === 0
+    ) {
+      errors.push(`${label}: must have a non-empty 'columns' object`);
+    }
+
+    if (source.type === "http") {
+      const httpSource = source as HttpSource;
+      if (!httpSource.method) {
+        errors.push(`${label}: http source missing 'method'`);
+      }
+      if (!httpSource.url) {
+        errors.push(`${label}: http source missing 'url'`);
+      }
+      if (!httpSource.extract) {
+        errors.push(`${label}: http source missing 'extract'`);
+      }
+      if (httpSource.extract && !isValidJsonPath(httpSource.extract)) {
+        errors.push(
+          `${label}: invalid JSONPath in 'extract': "${httpSource.extract}"`,
+        );
+      }
+      if (httpSource.extractPath && !isValidJsonPath(httpSource.extractPath)) {
+        errors.push(
+          `${label}: invalid JSONPath in 'extractPath': "${httpSource.extractPath}"`,
+        );
+      }
+      // Validate templates in url
+      if (httpSource.url) {
+        const invalid = findInvalidTemplates(httpSource.url);
+        for (const t of invalid) {
+          errors.push(`${label}: invalid template "${t}" in url`);
+        }
+      }
+    } else if (source.type === "exec") {
+      const execSource = source as ExecSource;
+      if (!execSource.command) {
+        errors.push(`${label}: exec source missing 'command'`);
+      }
+      if (execSource.extract && !isValidJsonPath(execSource.extract)) {
+        errors.push(
+          `${label}: invalid JSONPath in 'extract': "${execSource.extract}"`,
+        );
+      }
+      if (
+        execSource.timeout !== undefined &&
+        (typeof execSource.timeout !== "number" || execSource.timeout <= 0)
+      ) {
+        errors.push(
+          `${label}: 'timeout' must be a positive number (got ${JSON.stringify(execSource.timeout)})`,
+        );
+      }
+    }
+
+    // Validate schedule if present (for non-webhook sources)
+    if (source.type !== "webhook") {
+      const s = source as HttpSource | ExecSource;
+      if (
+        s.schedule &&
+        !VALID_SCHEDULES.has(s.schedule) &&
+        !/^\S+\s+\S+\s+\S+\s+\S+\s+\S+$/.test(s.schedule)
+      ) {
+        warnings.push(
+          `${label}: schedule "${s.schedule}" is not a known schedule (known: manual, hourly, daily, weekly, or cron expression)`,
+        );
+      }
+    }
+  }
+
+  // 9. Config size warning
   const serialized = JSON.stringify(config);
   if (serialized.length > CONFIG_SIZE_WARN) {
     warnings.push(

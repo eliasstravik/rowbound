@@ -1014,6 +1014,188 @@ server.registerTool("get_run", {
     }
 });
 // ---------------------------------------------------------------------------
+// Source schemas
+// ---------------------------------------------------------------------------
+const sourceConfigSchema = z
+    .object({
+    id: z.string().describe("Unique source identifier"),
+    type: z.enum(["http", "exec", "webhook"]).describe("Source type"),
+    method: z.string().optional().describe("HTTP method (GET, POST, etc.)"),
+    url: z.string().optional().describe("URL template for HTTP sources"),
+    headers: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("HTTP headers"),
+    body: z.any().optional().describe("HTTP request body"),
+    extract: z
+        .string()
+        .optional()
+        .describe("JSONPath to extract array from response"),
+    extractPath: z
+        .string()
+        .optional()
+        .describe("JSONPath to drill into nested object"),
+    command: z.string().optional().describe("Shell command for exec sources"),
+    timeout: z.number().optional().describe("Timeout in milliseconds"),
+    columns: z
+        .record(z.string(), z.string())
+        .describe("Column mappings: { Header: JSONPath }"),
+    dedup: z.string().optional().describe("Column header to deduplicate on"),
+    updateExisting: z
+        .boolean()
+        .optional()
+        .describe("Update existing rows when dedup matches (default: false)"),
+    schedule: z
+        .string()
+        .optional()
+        .describe("Run schedule: manual, hourly, daily, weekly, or cron"),
+    onError: z
+        .record(z.string(), z.any())
+        .optional()
+        .describe("Error handling configuration"),
+})
+    .passthrough();
+// ---------------------------------------------------------------------------
+// Source tools
+// ---------------------------------------------------------------------------
+server.registerTool("add_source", {
+    description: "Add a data source to the pipeline. Sources create new rows from external data (APIs, commands, webhooks).",
+    inputSchema: z.object({
+        sheet: z.string().describe("Spreadsheet ID"),
+        tab: z.string().optional().describe("Tab name (default Sheet1)"),
+        source: sourceConfigSchema.describe("Source configuration"),
+    }),
+}, async ({ sheet, tab, source }) => {
+    try {
+        const ref = buildRef(sheet, tab);
+        const existing = await adapter.readConfig(ref);
+        if (!existing)
+            return err("No config found. Run init_pipeline first.");
+        const reconciled = await reconcile(adapter, ref, existing);
+        const tabConfig = reconciled.tabConfig;
+        if (!tabConfig.sources)
+            tabConfig.sources = [];
+        if (tabConfig.sources.some((s) => s.id === source.id)) {
+            return err(`Source "${source.id}" already exists.`);
+        }
+        tabConfig.sources.push(source);
+        await adapter.writeConfig(ref, reconciled.config);
+        return ok(`Added source "${source.id}" (${source.type})`);
+    }
+    catch (error) {
+        return err(error);
+    }
+});
+server.registerTool("remove_source", {
+    description: "Remove a data source from the pipeline",
+    inputSchema: z.object({
+        sheet: z.string().describe("Spreadsheet ID"),
+        tab: z.string().optional().describe("Tab name"),
+        source_id: z.string().describe("Source ID to remove"),
+    }),
+}, async ({ sheet, tab, source_id }) => {
+    try {
+        const ref = buildRef(sheet, tab);
+        const existing = await adapter.readConfig(ref);
+        if (!existing)
+            return err("No config found.");
+        const reconciled = await reconcile(adapter, ref, existing);
+        const tabConfig = reconciled.tabConfig;
+        if (!tabConfig.sources)
+            return err("No sources configured.");
+        const idx = tabConfig.sources.findIndex((s) => s.id === source_id);
+        if (idx === -1)
+            return err(`Source "${source_id}" not found.`);
+        tabConfig.sources.splice(idx, 1);
+        await adapter.writeConfig(ref, reconciled.config);
+        return ok(`Removed source "${source_id}".`);
+    }
+    catch (error) {
+        return err(error);
+    }
+});
+server.registerTool("update_source", {
+    description: "Update fields on an existing data source",
+    inputSchema: z.object({
+        sheet: z.string().describe("Spreadsheet ID"),
+        tab: z.string().optional().describe("Tab name"),
+        source_id: z.string().describe("Source ID to update"),
+        patch: sourceConfigSchema.partial().describe("Fields to update"),
+    }),
+}, async ({ sheet, tab, source_id, patch }) => {
+    try {
+        const ref = buildRef(sheet, tab);
+        const existing = await adapter.readConfig(ref);
+        if (!existing)
+            return err("No config found.");
+        const reconciled = await reconcile(adapter, ref, existing);
+        const tabConfig = reconciled.tabConfig;
+        if (!tabConfig.sources)
+            return err("No sources configured.");
+        const source = tabConfig.sources.find((s) => s.id === source_id);
+        if (!source)
+            return err(`Source "${source_id}" not found.`);
+        Object.assign(source, patch);
+        await adapter.writeConfig(ref, reconciled.config);
+        return ok(`Updated source "${source_id}".`);
+    }
+    catch (error) {
+        return err(error);
+    }
+});
+server.registerTool("run_source", {
+    description: "Execute a data source to populate rows from external data. Sources fetch data from APIs or commands and create/update rows in the sheet.",
+    inputSchema: z.object({
+        sheet: z.string().describe("Spreadsheet ID"),
+        tab: z.string().optional().describe("Tab name"),
+        source_id: z.string().describe("Source ID to run"),
+        dry_run: z
+            .boolean()
+            .optional()
+            .describe("Preview without writing (default: false)"),
+    }),
+}, async ({ sheet, tab, source_id, dry_run }) => {
+    try {
+        const ref = buildRef(sheet, tab);
+        const existing = await adapter.readConfig(ref);
+        if (!existing)
+            return err("No config found.");
+        const reconciled = await reconcile(adapter, ref, existing);
+        const tabConfig = reconciled.tabConfig;
+        if (!tabConfig.sources)
+            return err("No sources configured.");
+        const source = tabConfig.sources.find((s) => s.id === source_id);
+        if (!source)
+            return err(`Source "${source_id}" not found.`);
+        const resolvedConfig = {
+            ...reconciled.config,
+            actions: tabConfig.actions,
+            sources: tabConfig.sources,
+        };
+        const env = buildSafeEnv(resolvedConfig);
+        const { executeSource: execSrc } = await import("../core/source.js");
+        const result = await execSrc(source, {
+            adapter,
+            ref,
+            env,
+            dryRun: dry_run ?? false,
+        });
+        const lines = [
+            `Source "${source_id}" ${dry_run ? "(dry run)" : "completed"}:`,
+            `  Rows created: ${result.rowsCreated}`,
+            `  Rows updated: ${result.rowsUpdated}`,
+            `  Rows skipped: ${result.rowsSkipped}`,
+        ];
+        if (result.errors.length > 0) {
+            lines.push(`  Errors: ${result.errors.join("; ")}`);
+        }
+        return ok(lines.join("\n"));
+    }
+    catch (error) {
+        return err(error);
+    }
+});
+// ---------------------------------------------------------------------------
 // Export startup function
 // ---------------------------------------------------------------------------
 export async function startMcpServer() {

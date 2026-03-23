@@ -355,7 +355,7 @@ export function registerConfig(program: Command): void {
             }
             const { gid, tab } = getTabConfig(existing, opts.tab);
             if (existing.tabs) {
-              tab.enabled = opts.enabled ? true : false;
+              tab.enabled = !!opts.enabled;
               existing.tabs[gid] = tab;
               changes.push(`enabled=${tab.enabled}`);
             } else {

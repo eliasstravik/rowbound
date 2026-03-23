@@ -91,7 +91,10 @@ export function registerRun(program) {
             const resolvedConfig = {
                 ...reconciled.config,
                 actions: tabConfig.actions,
-                settings: { ...reconciled.config.settings, ...(tabConfig.settings || {}) },
+                settings: {
+                    ...reconciled.config.settings,
+                    ...(tabConfig.settings || {}),
+                },
             };
             // Convert CLI row format to engine format
             let range;

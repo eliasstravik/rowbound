@@ -205,6 +205,11 @@ body {
 .badge-lookup    { background: #f3e8fd; color: #8430ce; }
 .badge-write     { background: #e0f7fa; color: #00796b; }
 
+/* Source type badges */
+.badge-src-http    { background: #e8f0fe; color: #1a73e8; }
+.badge-src-exec    { background: #fce8e6; color: #d93025; }
+.badge-src-webhook { background: #e6f4ea; color: #188038; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    OVERVIEW LIST
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -315,7 +320,9 @@ var state = {
   tabs: [],
   view: 'loading',
   editingAction: null,
-  originalAction: null
+  originalAction: null,
+  editingSource: null,
+  originalSource: null
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -369,6 +376,36 @@ function setActions(actions) {
     c.tabs[gid].actions = actions;
   } else {
     c.actions = actions;
+  }
+}
+
+function getSources() {
+  if (!state.config) return [];
+  var tc = getTabConfig();
+  if (tc && tc.sources) return tc.sources;
+  return state.config.sources || [];
+}
+
+function setSources(sources) {
+  if (!state.config) return;
+  var c = state.config;
+  if (c.tabs && state.columnInfo) {
+    var gid = state.columnInfo.tabGid;
+    if (!c.tabs[gid]) {
+      c.tabs[gid] = { name: state.columnInfo.tabName, columns: {}, actions: [], sources: [] };
+    }
+    c.tabs[gid].sources = sources;
+  } else {
+    c.sources = sources;
+  }
+}
+
+function sourceSummary(s) {
+  switch (s.type) {
+    case 'http': return (s.method || 'GET') + ' ' + (s.url || '');
+    case 'exec': return s.command ? s.command.substring(0, 60) : '';
+    case 'webhook': return Object.keys(s.columns || {}).length + ' columns mapped';
+    default: return '';
   }
 }
 
@@ -582,10 +619,274 @@ function showOverview() {
   }
   safeSetHTML(document.getElementById('content'), h);
   renderFooter([
-    { label: 'Settings', cls: 'btn-text', action: 'showSettings()' },
+    { label: 'Sources', cls: 'btn-text', action: 'showSources()' },
     'spacer',
     { label: '+ New Action', cls: 'btn-primary', action: 'showCreate()' }
   ]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VIEW: SOURCES
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showSources() {
+  state.view = 'sources';
+  renderHeader('Sources', { showSettings: true });
+
+  var sources = getSources();
+  var h = '';
+
+  if (sources.length === 0) {
+    h += '<div class="empty-state">';
+    h += '<div class="empty-state-title">No sources configured</div>';
+    h += '<p>Sources create rows from external data — APIs, commands, or webhooks.</p>';
+    h += '</div>';
+  } else {
+    for (var i = 0; i < sources.length; i++) {
+      var s = sources[i];
+      var schedule = (s.type !== 'webhook') ? (s.schedule || 'manual') : 'webhook';
+      h += '<div class="action-item" onclick="editSourceByIndex(' + i + ')">';
+      h += '<div class="action-item-header">';
+      h += '<span class="badge badge-src-' + esc(s.type) + '">' + esc(s.type) + '</span>';
+      h += '<span class="action-item-title">' + esc(s.id) + '</span>';
+      h += '<div class="action-item-reorder">';
+      if (i > 0) h += '<button onclick="event.stopPropagation();moveSource(' + i + ',-1)" title="Move up">&#9650;</button>';
+      if (i < sources.length - 1) h += '<button onclick="event.stopPropagation();moveSource(' + i + ',1)" title="Move down">&#9660;</button>';
+      h += '</div></div>';
+      h += '<div class="action-item-meta">' + esc(sourceSummary(s)) + '</div>';
+      h += '<div class="action-item-meta">' + esc(schedule) + (s.dedup ? ' \u00b7 dedup: ' + esc(s.dedup) : '') + '</div>';
+      h += '</div>';
+    }
+  }
+  safeSetHTML(document.getElementById('content'), h);
+  renderFooter([
+    { label: 'Actions', cls: 'btn-text', action: 'showOverview()' },
+    'spacer',
+    { label: '+ New Source', cls: 'btn-primary', action: 'showCreateSource()' }
+  ]);
+}
+
+function editSourceByIndex(idx) {
+  var sources = getSources();
+  if (idx >= 0 && idx < sources.length) {
+    showSourceEditor(sources[idx]);
+  }
+}
+
+function moveSource(idx, dir) {
+  var sources = getSources();
+  var newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= sources.length) return;
+  var temp = sources[idx];
+  sources[idx] = sources[newIdx];
+  sources[newIdx] = temp;
+  setSources(sources);
+  persistConfig('Source reordered');
+  showSources();
+}
+
+function showCreateSource() {
+  var s = { id: 'new_source', type: 'http', method: 'POST', url: '', extract: '$', columns: {}, schedule: 'manual' };
+  state.editingSource = s;
+  state.originalSource = null;
+  renderHeader('New Source', { back: 'showSources()' });
+  renderSourceEditorContent();
+  renderFooter([
+    { label: 'Cancel', cls: 'btn-secondary', action: 'showSources()' },
+    'spacer',
+    { label: 'Create', cls: 'btn-primary', action: 'saveSource()' }
+  ]);
+}
+
+function showSourceEditor(source) {
+  state.view = 'sourceEditor';
+  state.editingSource = deepCopy(source);
+  state.originalSource = deepCopy(source);
+  renderHeader('Source: ' + source.id, { back: 'showSources()' });
+  renderSourceEditorContent();
+  renderFooter([
+    { label: 'Delete', cls: 'btn-danger', action: 'confirmDeleteSource()' },
+    'spacer',
+    { label: 'Cancel', cls: 'btn-secondary', action: 'showSources()' },
+    { label: 'Save', cls: 'btn-primary', action: 'saveSource()' }
+  ]);
+}
+
+function renderSourceEditorContent() {
+  var s = state.editingSource;
+  var h = '';
+
+  h += '<div class="section"><div class="section-title">Source</div>';
+  h += field('ID', '<input class="field-input" name="src_id" value="' + esc(s.id) + '">', 'Unique identifier');
+  h += field('Type', '<select class="field-select" name="src_type" onchange="onSourceTypeChange(this.value)">' +
+    opt('http', s.type) + opt('exec', s.type) + opt('webhook', s.type) + '</select>');
+  h += '</div>';
+
+  // Type-specific fields
+  if (s.type === 'http') {
+    h += '<div class="section"><div class="section-title">Request</div>';
+    h += '<div class="field-row"><div class="field">' + fieldLabel('Method');
+    h += '<select class="field-select" name="src_method">' +
+      opt('GET', s.method) + opt('POST', s.method) + opt('PUT', s.method) + '</select></div></div>';
+    h += field('URL', '<input class="field-input" name="src_url" value="' + esc(s.url || '') + '" placeholder="https://api.example.com/search">', 'Supports {{env.VAR}} templates');
+    h += '</div>';
+
+    h += '<div class="section"><div class="section-title">Headers</div>';
+    h += buildKvList('src_headers', s.headers || {}, 'Header', 'Value');
+    h += '</div>';
+
+    h += '<div class="section"><div class="section-title">Body</div>';
+    h += field('Request Body', '<textarea class="field-textarea" name="src_body" placeholder="JSON body">' +
+      esc(s.body ? JSON.stringify(s.body, null, 2) : '') + '</textarea>');
+    h += '</div>';
+
+    h += '<div class="section"><div class="section-title">Response</div>';
+    h += field('Extract (JSONPath)', '<input class="field-input" name="src_extract" value="' + esc(s.extract || '') + '" placeholder="$">',
+      'JSONPath to the array in the response');
+    h += field('Extract Path', '<input class="field-input" name="src_extractPath" value="' + esc(s.extractPath || '') + '" placeholder="$.results">',
+      'Drill into nested object before extracting array');
+    h += '</div>';
+  } else if (s.type === 'exec') {
+    h += '<div class="section"><div class="section-title">Command</div>';
+    h += field('Shell Command', '<textarea class="field-textarea" name="src_command" placeholder="curl https://...">' + esc(s.command || '') + '</textarea>');
+    h += field('Extract (JSONPath)', '<input class="field-input" name="src_extract" value="' + esc(s.extract || '') + '" placeholder="$.results">',
+      'Optional \u2014 extract array from JSON output');
+    h += field('Timeout (ms)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 30000) + '">');
+    h += '</div>';
+  }
+  // webhook has no request fields
+
+  h += '<div class="section"><div class="section-title">Column Mappings</div>';
+  h += '<p class="field-hint" style="margin-bottom:8px">Map destination columns to JSONPath per item. Use $.field or literal values.</p>';
+  h += buildKvList('src_columns', s.columns || {}, 'Column Header', '$.field');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Deduplication</div>';
+  h += field('Dedup Column', '<input class="field-input" name="src_dedup" value="' + esc(s.dedup || '') + '" placeholder="e.g. Email">',
+    'Skip or update rows where this column matches');
+  h += field('Update Existing', '<select class="field-select" name="src_updateExisting">' +
+    '<option value="false"' + (!s.updateExisting ? ' selected' : '') + '>Skip duplicates</option>' +
+    '<option value="true"' + (s.updateExisting ? ' selected' : '') + '>Update existing rows</option></select>',
+    'What to do when a duplicate is found');
+  h += '</div>';
+
+  if (s.type !== 'webhook') {
+    h += '<div class="section"><div class="section-title">Schedule</div>';
+    h += field('Run Schedule', '<select class="field-select" name="src_schedule">' +
+      opt('manual', s.schedule || 'manual') + opt('hourly', s.schedule) +
+      opt('daily', s.schedule) + opt('weekly', s.schedule) + '</select>',
+      'When to auto-run this source');
+    h += '</div>';
+  }
+
+  safeSetHTML(document.getElementById('content'), h);
+}
+
+function onSourceTypeChange(newType) {
+  var s = state.editingSource;
+  s.id = getVal('src_id') || s.id;
+  s.type = newType;
+  delete s.method; delete s.url; delete s.headers; delete s.body;
+  delete s.extract; delete s.extractPath; delete s.command; delete s.timeout;
+  s.columns = readKvList('src_columns');
+  s.dedup = getVal('src_dedup') || undefined;
+  s.updateExisting = getVal('src_updateExisting') === 'true';
+  if (newType === 'http') { s.method = 'POST'; s.url = ''; s.extract = '$'; }
+  if (newType === 'exec') { s.command = ''; }
+  renderSourceEditorContent();
+}
+
+function readFormSource() {
+  var type = getVal('src_type');
+  var s = { id: getVal('src_id').trim() || 'source_1', type: type };
+
+  if (type === 'http') {
+    s.method = getVal('src_method') || 'POST';
+    s.url = getVal('src_url');
+    var hdr = readKvList('src_headers');
+    if (Object.keys(hdr).length > 0) s.headers = hdr;
+    var bodyStr = getVal('src_body').trim();
+    if (bodyStr) { try { s.body = JSON.parse(bodyStr); } catch(e) { s.body = bodyStr; } }
+    s.extract = getVal('src_extract') || '$';
+    var ep = getVal('src_extractPath').trim();
+    if (ep) s.extractPath = ep;
+  } else if (type === 'exec') {
+    s.command = getVal('src_command');
+    var ext = getVal('src_extract').trim();
+    if (ext) s.extract = ext;
+    var timeout = parseInt(getVal('src_timeout'));
+    if (timeout && timeout !== 30000) s.timeout = timeout;
+  }
+
+  s.columns = readKvList('src_columns');
+
+  var dedup = getVal('src_dedup').trim();
+  if (dedup) s.dedup = dedup;
+  if (s.dedup && getVal('src_updateExisting') === 'true') s.updateExisting = true;
+
+  if (type !== 'webhook') {
+    var sched = getVal('src_schedule');
+    if (sched && sched !== 'manual') s.schedule = sched;
+  }
+
+  return s;
+}
+
+function saveSource() {
+  var newSource = readFormSource();
+  ensureConfig();
+  var sources = getSources();
+  var found = -1;
+  if (state.originalSource) {
+    for (var i = 0; i < sources.length; i++) {
+      if (sources[i].id === state.originalSource.id) { found = i; break; }
+    }
+  }
+  if (found >= 0) {
+    sources[found] = newSource;
+  } else {
+    sources.push(newSource);
+  }
+  setSources(sources);
+  persistConfig(found >= 0 ? 'Source updated' : 'Source created');
+  state.editingSource = deepCopy(newSource);
+  state.originalSource = deepCopy(newSource);
+  showSources();
+}
+
+function confirmDeleteSource() {
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  var dialog = document.createElement('div');
+  dialog.className = 'confirm-dialog';
+  var title = document.createElement('h3');
+  title.textContent = 'Delete Source';
+  var msg = document.createElement('p');
+  msg.textContent = 'Remove this source? This cannot be undone.';
+  var btns = document.createElement('div');
+  btns.className = 'confirm-dialog-btns';
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = function() { overlay.remove(); };
+  var deleteBtn = document.createElement('button');
+  deleteBtn.className = 'btn btn-danger';
+  deleteBtn.textContent = 'Delete';
+  deleteBtn.onclick = function() {
+    overlay.remove();
+    if (!state.originalSource) { showSources(); return; }
+    var sources = getSources();
+    var filtered = sources.filter(function(s) { return s.id !== state.originalSource.id; });
+    setSources(filtered);
+    persistConfig('Source deleted');
+    showSources();
+  };
+  btns.appendChild(cancelBtn);
+  btns.appendChild(deleteBtn);
+  dialog.appendChild(title);
+  dialog.appendChild(msg);
+  dialog.appendChild(btns);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1293,6 +1594,7 @@ function init() {
     ensureConfig();
     switch (data.initialView) {
       case 'overview': showOverview(); break;
+      case 'sources': showSources(); break;
       case 'settings': showSettings(); break;
       default: showColumn(); break;
     }

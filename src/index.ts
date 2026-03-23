@@ -2,6 +2,7 @@
 // Re-exports for programmatic usage
 
 export { SheetsAdapter } from "./adapters/sheets/sheets-adapter.js";
+export { flattenItem, forceText } from "./core/cell-utils.js";
 export { evaluateCondition } from "./core/condition.js";
 export {
   type RunPipelineOptions,
@@ -44,23 +45,40 @@ export {
   writeRunState,
 } from "./core/run-state.js";
 export { createRunTracker } from "./core/run-tracker.js";
+export {
+  executeSource,
+  executeWebhookSource,
+  type SourceOptions,
+} from "./core/source.js";
+export {
+  isSourceDue,
+  readScheduleState,
+  type ScheduleEntry,
+  type ScheduleState,
+  updateScheduleEntry,
+} from "./core/source-schedule.js";
 export { resolveObject, resolveTemplate } from "./core/template.js";
 export type {
   Action,
   Adapter,
   CellUpdate,
   ExecAction,
+  ExecSource,
   HttpAction,
+  HttpSource,
   LookupAction,
   OnErrorConfig,
   PipelineConfig,
   PipelineSettings,
   Row,
   SheetRef,
+  Source,
+  SourceResult,
   TabConfig,
   TransformAction,
   WaterfallAction,
   WaterfallProvider,
+  WebhookSource,
   WriteAction,
 } from "./core/types.js";
 export {

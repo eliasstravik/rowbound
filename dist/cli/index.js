@@ -7,6 +7,7 @@ import { getGlobalEnvPath, registerEnv } from "./env.js";
 import { registerInit } from "./init.js";
 import { registerRun } from "./run.js";
 import { registerRuns } from "./runs.js";
+import { registerSource } from "./source.js";
 import { registerStatus } from "./status.js";
 import { registerSync } from "./sync.js";
 import { registerWatch } from "./watch.js";
@@ -29,6 +30,7 @@ registerWatch(program);
 registerRuns(program);
 registerSync(program);
 registerEnv(program);
+registerSource(program);
 program
     .command("mcp")
     .description("Start MCP server (stdio)")

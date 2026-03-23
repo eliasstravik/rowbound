@@ -14,6 +14,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Rowbound')
     .addItem('Actions', 'openOverview')
+    .addItem('Sources', 'openSources')
     .addItem('Settings', 'openPipelineSettings')
     .addToUi();
 }
@@ -27,6 +28,11 @@ function openColumnConfig() {
 
 function openOverview() {
   PropertiesService.getUserProperties().setProperty('rb_view', 'overview');
+  openSidebar_();
+}
+
+function openSources() {
+  PropertiesService.getUserProperties().setProperty('rb_view', 'sources');
   openSidebar_();
 }
 

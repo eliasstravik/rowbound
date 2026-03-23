@@ -258,7 +258,7 @@ export function registerConfig(program) {
                 }
                 const { gid, tab } = getTabConfig(existing, opts.tab);
                 if (existing.tabs) {
-                    tab.enabled = opts.enabled ? true : false;
+                    tab.enabled = !!opts.enabled;
                     existing.tabs[gid] = tab;
                     changes.push(`enabled=${tab.enabled}`);
                 }
@@ -284,7 +284,11 @@ export function registerConfig(program) {
                 }
                 if (useTabSettings && tabGid && existing.tabs) {
                     const tab = existing.tabs[tabGid];
-                    tab.settings = { ...existing.settings, ...(tab.settings || {}), concurrency: val };
+                    tab.settings = {
+                        ...existing.settings,
+                        ...(tab.settings || {}),
+                        concurrency: val,
+                    };
                     changes.push(`concurrency=${val} (tab)`);
                 }
                 else {
@@ -301,7 +305,11 @@ export function registerConfig(program) {
                 }
                 if (useTabSettings && tabGid && existing.tabs) {
                     const tab = existing.tabs[tabGid];
-                    tab.settings = { ...existing.settings, ...(tab.settings || {}), rateLimit: val };
+                    tab.settings = {
+                        ...existing.settings,
+                        ...(tab.settings || {}),
+                        rateLimit: val,
+                    };
                     changes.push(`rateLimit=${val} (tab)`);
                 }
                 else {
@@ -318,7 +326,11 @@ export function registerConfig(program) {
                 }
                 if (useTabSettings && tabGid && existing.tabs) {
                     const tab = existing.tabs[tabGid];
-                    tab.settings = { ...existing.settings, ...(tab.settings || {}), retryAttempts: val };
+                    tab.settings = {
+                        ...existing.settings,
+                        ...(tab.settings || {}),
+                        retryAttempts: val,
+                    };
                     changes.push(`retryAttempts=${val} (tab)`);
                 }
                 else {
@@ -335,7 +347,11 @@ export function registerConfig(program) {
                 }
                 if (useTabSettings && tabGid && existing.tabs) {
                     const tab = existing.tabs[tabGid];
-                    tab.settings = { ...existing.settings, ...(tab.settings || {}), retryBackoff: opts.retryBackoff };
+                    tab.settings = {
+                        ...existing.settings,
+                        ...(tab.settings || {}),
+                        retryBackoff: opts.retryBackoff,
+                    };
                     changes.push(`retryBackoff=${opts.retryBackoff} (tab)`);
                 }
                 else {

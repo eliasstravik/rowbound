@@ -1,31 +1,6 @@
+import { flattenItem, forceText } from "./cell-utils.js";
 import { extractValue } from "./extractor.js";
 import { resolveTemplate } from "./template.js";
-/**
- * Flatten an array element into a string-keyed record for use in {{item.field}} templates.
- * Scalar values are stored under the key "_value".
- * Object properties are stored directly as string entries.
- */
-function flattenItem(item) {
-    if (item === null || item === undefined) {
-        return { _value: "" };
-    }
-    if (typeof item !== "object") {
-        return { _value: String(item) };
-    }
-    const result = {};
-    for (const [key, val] of Object.entries(item)) {
-        if (val === null || val === undefined) {
-            result[key] = "";
-        }
-        else if (typeof val === "object") {
-            result[key] = JSON.stringify(val);
-        }
-        else {
-            result[key] = String(val);
-        }
-    }
-    return result;
-}
 /**
  * Execute a write action: resolve column mappings from the current row context
  * and write one or more rows to a destination tab.
@@ -92,15 +67,6 @@ export async function executeWrite(action, context, options) {
     catch {
         return `error: tab "${action.destTab}" not found or not accessible`;
     }
-    // Force text mode for values that Google Sheets would misinterpret as
-    // numbers or formulas (e.g. phone numbers like "+46 8 797 75 00").
-    // A leading single quote tells Sheets to treat the value as plain text
-    // without displaying the quote itself (only works with USER_ENTERED mode).
-    const forceText = (val) => {
-        if (/^[+=]/.test(val) || /^-\d/.test(val))
-            return `'${val}`;
-        return val;
-    };
     const mode = action.mode ?? "append";
     let writtenCount = 0;
     if (mode === "append") {

@@ -131,6 +131,75 @@ export interface WriteAction {
   expandPath?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Sources — create rows from external data
+// ---------------------------------------------------------------------------
+
+/** HTTP source: fetch from an API and create rows from the response */
+export interface HttpSource {
+  id: string;
+  type: "http";
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+  /** JSONPath to extract the array from the response (e.g. "$" for top-level array) */
+  extract: string;
+  /** JSONPath to drill into a nested object before extracting the array (e.g. "$.results") */
+  extractPath?: string;
+  /** Column mappings: { "Header": "$.field" } — JSONPath per element */
+  columns: Record<string, string>;
+  /** Column header to deduplicate on. Existing rows with the same value are skipped or updated. */
+  dedup?: string;
+  /** When true and dedup is set, update matched rows instead of skipping (default: false) */
+  updateExisting?: boolean;
+  /** Run schedule: "manual" (default), "hourly", "daily", "weekly", or cron expression */
+  schedule?: string;
+  onError?: OnErrorConfig;
+}
+
+/** Exec source: run a shell command and create rows from JSON output */
+export interface ExecSource {
+  id: string;
+  type: "exec";
+  command: string;
+  /** JSONPath to extract the array from stdout (e.g. "$.results"). If omitted, stdout must be a JSON array. */
+  extract?: string;
+  /** Column mappings: { "Header": "$.field" } — JSONPath per element */
+  columns: Record<string, string>;
+  dedup?: string;
+  updateExisting?: boolean;
+  schedule?: string;
+  timeout?: number;
+  onError?: OnErrorConfig;
+}
+
+/** Webhook source: accept inbound POST payloads and create rows */
+export interface WebhookSource {
+  id: string;
+  type: "webhook";
+  /** Column mappings: { "Header": "$.payload.field" } — JSONPath per payload */
+  columns: Record<string, string>;
+  dedup?: string;
+  updateExisting?: boolean;
+}
+
+/** Union of all source types */
+export type Source = HttpSource | ExecSource | WebhookSource;
+
+/** Result of executing a source */
+export interface SourceResult {
+  sourceId: string;
+  rowsCreated: number;
+  rowsUpdated: number;
+  rowsSkipped: number;
+  errors: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Actions — enrich existing rows
+// ---------------------------------------------------------------------------
+
 /** Union of all action types */
 export type Action =
   | HttpAction
@@ -153,6 +222,7 @@ export interface TabConfig {
   name: string;
   enabled?: boolean; // default true — set to false to stop all processing
   columns: Record<string, string>; // { rangeId: headerName }
+  sources?: Source[];
   actions: Action[];
   settings?: PipelineSettings; // per-tab settings override
 }
@@ -163,6 +233,7 @@ export interface PipelineConfig {
   tabs?: Record<string, TabConfig>; // v2: { GID: TabConfig }
   // Legacy v1 fields (kept for migration)
   columns?: Record<string, string>;
+  sources?: Source[];
   actions: Action[];
   settings: PipelineSettings;
 }
