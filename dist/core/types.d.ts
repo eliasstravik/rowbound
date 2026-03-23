@@ -23,6 +23,13 @@ export interface CellUpdate {
 export type OnErrorConfig = Record<string, string | {
     write: string;
 }>;
+/** A reusable script definition stored in the config */
+export interface ScriptDef {
+    /** Runtime to execute the script with */
+    runtime: "bash" | "python3" | "node";
+    /** The script code (multi-line, stored with real newlines) */
+    code: string;
+}
 /** HTTP enrichment action */
 export interface HttpAction {
     id: string;
@@ -165,8 +172,26 @@ export interface WebhookSource {
     dedup?: string;
     updateExisting?: boolean;
 }
+/** Script source: runs a named script and creates rows from JSON output */
+export interface ScriptSource {
+    id: string;
+    type: "script";
+    /** Name of a script defined in the scripts section */
+    script: string;
+    /** Arguments passed to the script. Supports {{env.X}} templates. */
+    args?: string[];
+    /** JSONPath to extract the array from the script output */
+    extract?: string;
+    /** Column mappings: { "Header": "$.field" } — JSONPath per element */
+    columns: Record<string, string>;
+    dedup?: string;
+    updateExisting?: boolean;
+    schedule?: string;
+    timeout?: number;
+    onError?: OnErrorConfig;
+}
 /** Union of all source types */
-export type Source = HttpSource | ExecSource | WebhookSource;
+export type Source = HttpSource | ExecSource | WebhookSource | ScriptSource;
 /** Result of executing a source */
 export interface SourceResult {
     sourceId: string;
@@ -175,8 +200,23 @@ export interface SourceResult {
     rowsSkipped: number;
     errors: string[];
 }
+/** Script action: runs a named script from the scripts section */
+export interface ScriptAction {
+    id: string;
+    type: "script";
+    target: string;
+    when?: string;
+    /** Name of a script defined in the scripts section */
+    script: string;
+    /** Arguments passed to the script. Supports {{row.x}} and {{env.X}} templates. */
+    args?: string[];
+    /** Optional JSONPath to extract a value from the script's JSON output */
+    extract?: string;
+    timeout?: number;
+    onError?: OnErrorConfig;
+}
 /** Union of all action types */
-export type Action = HttpAction | WaterfallAction | TransformAction | ExecAction | LookupAction | WriteAction;
+export type Action = HttpAction | WaterfallAction | TransformAction | ExecAction | LookupAction | WriteAction | ScriptAction;
 /** Global pipeline execution settings */
 export interface PipelineSettings {
     concurrency: number;
@@ -189,6 +229,7 @@ export interface TabConfig {
     name: string;
     enabled?: boolean;
     columns: Record<string, string>;
+    scripts?: Record<string, ScriptDef>;
     sources?: Source[];
     actions: Action[];
     settings?: PipelineSettings;
@@ -198,6 +239,7 @@ export interface PipelineConfig {
     version: string;
     tabs?: Record<string, TabConfig>;
     columns?: Record<string, string>;
+    scripts?: Record<string, ScriptDef>;
     sources?: Source[];
     actions: Action[];
     settings: PipelineSettings;

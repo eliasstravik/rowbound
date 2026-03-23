@@ -1,6 +1,6 @@
 {
   "name": "rowbound",
-  "version": "1.1.3",
+  "version": "1.2.0",
   "description": "Open-source CLI and MCP server for Google Sheets enrichment — waterfalls, conditions, HTTP API integrations",
   "type": "module",
   "bin": {

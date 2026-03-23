@@ -10,6 +10,7 @@ const VALID_ACTION_TYPES = new Set([
     "exec",
     "lookup",
     "write",
+    "script",
 ]);
 /** Known retry backoff strategies. */
 const KNOWN_BACKOFF = new Set(["exponential", "linear", "fixed"]);
@@ -337,11 +338,36 @@ export function validateConfig(config) {
                 }
             }
         }
+        else if (action.type === "script") {
+            const scriptAction = action;
+            if (!scriptAction.script) {
+                errors.push(`${label}: script action missing 'script' name`);
+            }
+            if (scriptAction.extract && !isValidJsonPath(scriptAction.extract)) {
+                errors.push(`${label}: invalid JSONPath in 'extract': "${scriptAction.extract}"`);
+            }
+            if (scriptAction.timeout !== undefined &&
+                (typeof scriptAction.timeout !== "number" || scriptAction.timeout <= 0)) {
+                errors.push(`${label}: 'timeout' must be a positive number (got ${JSON.stringify(scriptAction.timeout)})`);
+            }
+        }
     }
-    // 8. Source validation
+    // 8. Script definitions validation
+    const VALID_RUNTIMES = new Set(["bash", "python3", "node"]);
+    const allScripts = config.scripts ?? {};
+    for (const [name, def] of Object.entries(allScripts)) {
+        const label = `Script "${name}"`;
+        if (!def.runtime || !VALID_RUNTIMES.has(def.runtime)) {
+            errors.push(`${label}: invalid runtime "${def.runtime}" (expected: bash, python3, node)`);
+        }
+        if (!def.code || typeof def.code !== "string" || def.code.trim() === "") {
+            errors.push(`${label}: 'code' must be a non-empty string`);
+        }
+    }
+    // 9. Source validation
     const sources = config.sources ?? [];
     const sourceIds = new Set();
-    const VALID_SOURCE_TYPES = new Set(["http", "exec", "webhook"]);
+    const VALID_SOURCE_TYPES = new Set(["http", "exec", "webhook", "script"]);
     const VALID_SCHEDULES = new Set(["manual", "hourly", "daily", "weekly"]);
     for (const source of sources) {
         const label = `Source "${source.id}"`;
@@ -396,6 +422,15 @@ export function validateConfig(config) {
             if (execSource.timeout !== undefined &&
                 (typeof execSource.timeout !== "number" || execSource.timeout <= 0)) {
                 errors.push(`${label}: 'timeout' must be a positive number (got ${JSON.stringify(execSource.timeout)})`);
+            }
+        }
+        if (source.type === "script") {
+            const scriptSource = source;
+            if (!scriptSource.script) {
+                errors.push(`${label}: script source missing 'script' name`);
+            }
+            if (scriptSource.extract && !isValidJsonPath(scriptSource.extract)) {
+                errors.push(`${label}: invalid JSONPath in 'extract': "${scriptSource.extract}"`);
             }
         }
         // Validate schedule if present (for non-webhook sources)

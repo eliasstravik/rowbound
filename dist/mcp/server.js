@@ -70,7 +70,15 @@ const actionConfigSchema = z
     .object({
     id: z.string().describe("Unique action identifier"),
     type: z
-        .enum(["http", "transform", "exec", "waterfall", "lookup", "write"])
+        .enum([
+        "http",
+        "transform",
+        "exec",
+        "waterfall",
+        "lookup",
+        "write",
+        "script",
+    ])
         .describe("Action type"),
     target: z.string().describe("Target column to write results to"),
     when: z
@@ -143,6 +151,15 @@ const actionConfigSchema = z
         .string()
         .optional()
         .describe("JSONPath to extract the array from the expanded value (e.g. '$.contacts')"),
+    // Script action fields
+    script: z
+        .string()
+        .optional()
+        .describe("Name of a script defined in the scripts section"),
+    args: z
+        .array(z.string())
+        .optional()
+        .describe("Arguments passed to the script"),
 })
     .passthrough();
 const actionPatchSchema = z
@@ -152,7 +169,15 @@ const actionPatchSchema = z
         .optional()
         .describe("New action identifier (renames the action)"),
     type: z
-        .enum(["http", "transform", "exec", "waterfall", "lookup", "write"])
+        .enum([
+        "http",
+        "transform",
+        "exec",
+        "waterfall",
+        "lookup",
+        "write",
+        "script",
+    ])
         .optional()
         .describe("Action type"),
     target: z.string().optional().describe("Target column to write results to"),
@@ -202,6 +227,15 @@ const actionPatchSchema = z
         .optional(),
     expand: z.string().optional(),
     expandPath: z.string().optional(),
+    // Script action fields
+    script: z
+        .string()
+        .optional()
+        .describe("Name of a script defined in the scripts section"),
+    args: z
+        .array(z.string())
+        .optional()
+        .describe("Arguments passed to the script"),
 })
     .passthrough();
 // ---------------------------------------------------------------------------
@@ -1019,7 +1053,7 @@ server.registerTool("get_run", {
 const sourceConfigSchema = z
     .object({
     id: z.string().describe("Unique source identifier"),
-    type: z.enum(["http", "exec", "webhook"]).describe("Source type"),
+    type: z.enum(["http", "exec", "webhook", "script"]).describe("Source type"),
     method: z.string().optional().describe("HTTP method (GET, POST, etc.)"),
     url: z.string().optional().describe("URL template for HTTP sources"),
     headers: z
@@ -1053,6 +1087,15 @@ const sourceConfigSchema = z
         .record(z.string(), z.any())
         .optional()
         .describe("Error handling configuration"),
+    // Script source fields
+    script: z
+        .string()
+        .optional()
+        .describe("Name of a script defined in the scripts section"),
+    args: z
+        .array(z.string())
+        .optional()
+        .describe("Arguments passed to the script"),
 })
     .passthrough();
 // ---------------------------------------------------------------------------
@@ -1190,6 +1233,91 @@ server.registerTool("run_source", {
             lines.push(`  Errors: ${result.errors.join("; ")}`);
         }
         return ok(lines.join("\n"));
+    }
+    catch (error) {
+        return err(error);
+    }
+});
+// ---------------------------------------------------------------------------
+// Script tools
+// ---------------------------------------------------------------------------
+const scriptDefSchema = z.object({
+    runtime: z
+        .enum(["bash", "python3", "node"])
+        .describe("Runtime to execute the script with"),
+    code: z.string().describe("The script code"),
+});
+server.registerTool("add_script", {
+    description: "Add a reusable script to the pipeline config. Scripts can be referenced by script actions and script sources.",
+    inputSchema: z.object({
+        sheet: z.string().describe("Spreadsheet ID"),
+        tab: z
+            .string()
+            .optional()
+            .describe("Tab name (default Sheet1). When set, the script is added at tab level."),
+        name: z.string().describe("Unique script name"),
+        script: scriptDefSchema.describe("Script definition with runtime and code"),
+    }),
+}, async ({ sheet, tab, name, script }) => {
+    try {
+        const ref = buildRef(sheet, tab);
+        const existing = await adapter.readConfig(ref);
+        if (!existing)
+            return err("No config found. Run init_pipeline first.");
+        if (existing.tabs) {
+            const { gid, tab: tabCfg } = getTabConfig(existing, tab);
+            if (!tabCfg.scripts)
+                tabCfg.scripts = {};
+            if (tabCfg.scripts[name]) {
+                return err(`Script "${name}" already exists.`);
+            }
+            tabCfg.scripts[name] = script;
+            existing.tabs[gid] = tabCfg;
+        }
+        else {
+            if (!existing.scripts)
+                existing.scripts = {};
+            if (existing.scripts[name]) {
+                return err(`Script "${name}" already exists.`);
+            }
+            existing.scripts[name] = script;
+        }
+        await adapter.writeConfig(ref, existing);
+        return ok(`Added script "${name}" (${script.runtime}).`);
+    }
+    catch (error) {
+        return err(error);
+    }
+});
+server.registerTool("remove_script", {
+    description: "Remove a script from the pipeline config by its name.",
+    inputSchema: z.object({
+        sheet: z.string().describe("Spreadsheet ID"),
+        tab: z.string().optional().describe("Tab name"),
+        name: z.string().describe("Script name to remove"),
+    }),
+}, async ({ sheet, tab, name }) => {
+    try {
+        const ref = buildRef(sheet, tab);
+        const existing = await adapter.readConfig(ref);
+        if (!existing)
+            return err("No config found.");
+        if (existing.tabs) {
+            const { gid, tab: tabCfg } = getTabConfig(existing, tab);
+            if (!tabCfg.scripts || !tabCfg.scripts[name]) {
+                return err(`Script "${name}" not found.`);
+            }
+            delete tabCfg.scripts[name];
+            existing.tabs[gid] = tabCfg;
+        }
+        else {
+            if (!existing.scripts || !existing.scripts[name]) {
+                return err(`Script "${name}" not found.`);
+            }
+            delete existing.scripts[name];
+        }
+        await adapter.writeConfig(ref, existing);
+        return ok(`Removed script "${name}".`);
     }
     catch (error) {
         return err(error);

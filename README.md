@@ -77,6 +77,7 @@ Column names are automatically resolved to stable IDs when you run `rowbound syn
 ### Sources — Create rows from external data
 - **HTTP sources** — fetch from any API, extract array from response, map columns via JSONPath
 - **Exec sources** — run shell commands, parse JSON output into rows
+- **Script sources** — run named scripts to generate rows from their output
 - **Webhook sources** — accept inbound POST payloads, create rows in real-time
 - **Deduplication** — skip or update existing rows based on a match column
 - **Scheduling** — run sources manually, hourly, daily, or weekly
@@ -86,6 +87,7 @@ Column names are automatically resolved to stable IDs when you run `rowbound syn
 - **Waterfall actions** — try multiple providers in order until one returns a result (e.g., Clearbit → Apollo → Hunter)
 - **Transform actions** — compute derived values with sandboxed JavaScript expressions
 - **Exec actions** — run shell commands and capture stdout
+- **Script actions** — run reusable named scripts stored in config; supports bash, python3, and node runtimes
 - **Lookup actions** — pull data from other tabs by matching on a column value; cached per pipeline run
 - **Write actions** — push data to other tabs with column mapping; supports append, upsert, and array expansion via `expandPath`
 
@@ -118,6 +120,8 @@ Column names are automatically resolved to stable IDs when you run `rowbound syn
 | `rowbound config remove-action <sheetId>` | Remove an action by ID |
 | `rowbound config update-action <sheetId>` | Update an action (merge partial JSON) |
 | `rowbound config set <sheetId>` | Update pipeline settings (`--enabled`, `--disabled`, `--concurrency`, `--rate-limit`, etc.) |
+| `rowbound config add-script <sheetId>` | Add a script to the pipeline config |
+| `rowbound config remove-script <sheetId>` | Remove a script by name |
 | `rowbound config validate <sheetId>` | Validate the pipeline config |
 | `rowbound runs [runId]` | List recent runs or view a specific run |
 | `rowbound runs clear` | Delete all run history |
@@ -221,6 +225,85 @@ Accept inbound POST payloads and create rows. Used with `rowbound watch`.
 | `dedup` | Column header to deduplicate on. Existing rows with the same value are skipped. |
 | `updateExisting` | When `true` and `dedup` is set, update matched rows instead of skipping (default: `false`). |
 | `schedule` | `"manual"` (default), `"hourly"`, `"daily"`, or `"weekly"`. Watch mode checks schedules automatically. |
+
+### script source
+
+Run a named script (defined in the `scripts` config section) and parse its output into rows.
+
+```json
+{
+  "id": "import_from_script",
+  "type": "script",
+  "script": "fetch_leads",
+  "args": ["--format", "json"],
+  "extract": "$.leads",
+  "columns": { "Name": "$.name", "Email": "$.email" },
+  "dedup": "Email"
+}
+```
+
+## Scripts
+
+Scripts are reusable code blocks stored in your pipeline config. Define a script once, then reference it from multiple actions or sources by name. Each script has a `runtime` (the interpreter) and `code` (the script body).
+
+### Config section
+
+Scripts are stored under the `scripts` key in your config (global or per-tab):
+
+```json
+{
+  "scripts": {
+    "claude_json": {
+      "runtime": "bash",
+      "code": "#!/bin/bash\ncurl -s https://api.anthropic.com/v1/messages \\\n  -H \"x-api-key: $ANTHROPIC_API_KEY\" \\\n  -H \"content-type: application/json\" \\\n  -d \"$1\""
+    },
+    "parse_csv": {
+      "runtime": "python3",
+      "code": "import csv, json, sys\nwith open(sys.argv[1]) as f:\n    print(json.dumps(list(csv.DictReader(f))))"
+    }
+  }
+}
+```
+
+Supported runtimes: `bash`, `python3`, `node`.
+
+### Referencing scripts from actions
+
+Use `"type": "script"` in an action to run a named script per row. The script receives row data via template-expanded arguments and its stdout is captured as the result.
+
+```json
+{
+  "id": "enrich_with_claude",
+  "type": "script",
+  "target": "ai_summary",
+  "script": "claude_json",
+  "args": ["{\"model\":\"claude-sonnet-4-20250514\",\"max_tokens\":256,\"messages\":[{\"role\":\"user\",\"content\":\"Summarize: {{row.company}}\"}]}"],
+  "extract": "$.content[0].text",
+  "timeout": 60000
+}
+```
+
+### Referencing scripts from sources
+
+Use `"type": "script"` in a source to run a named script and create rows from its output.
+
+```json
+{
+  "id": "load_leads",
+  "type": "script",
+  "script": "parse_csv",
+  "args": ["/tmp/leads.csv"],
+  "columns": { "Name": "$.name", "Email": "$.email" },
+  "dedup": "Email"
+}
+```
+
+### CLI commands
+
+| Command | Description |
+|---------|-------------|
+| `rowbound config add-script <sheetId>` | Add a script to the config |
+| `rowbound config remove-script <sheetId>` | Remove a script by name |
 
 ## Action Types
 
@@ -345,6 +428,22 @@ Push data to another tab with column mapping. Supports append, upsert, and array
 - **upsert** — update existing rows if `upsertMatch` column matches, otherwise append
 - **expand** + **expandPath** — expand a JSON array into multiple rows; use `{{item.field}}` in column templates to access element data
 
+### script
+
+Run a named script and capture its output. Scripts are defined in the `scripts` config section and referenced by name.
+
+```json
+{
+  "id": "ai_summary",
+  "type": "script",
+  "target": "summary",
+  "script": "claude_json",
+  "args": ["{\"prompt\":\"Summarize {{row.company}}\"}"],
+  "extract": "$.content[0].text",
+  "timeout": 60000
+}
+```
+
 ### Error handling
 
 Actions can define `onError` to map HTTP status codes (or exit codes for exec) to behaviors:
@@ -371,14 +470,15 @@ Rowbound includes an Apps Script sidebar that lets you configure actions directl
 ### Usage
 
 - **Rowbound → Actions** — view all configured actions, reorder them, or create new ones
-- **Rowbound → Sources** — view and manage data sources (http, exec, webhook) with type-specific editors
+- **Rowbound → Sources** — view and manage data sources (http, exec, webhook, script) with type-specific editors
+- **Rowbound → Scripts** — view, create, edit, and delete reusable scripts with runtime and code editor
 - **Rowbound → Settings** — edit pipeline settings (concurrency, rate limit, retries, backoff)
 - Click any action or source to edit its full config
 - The column dropdown (●/○ indicators) lets you navigate between columns and see which ones have actions
 
 ### Supported types
 
-All action types are configurable through the sidebar: HTTP, Waterfall, Transform, Exec, Lookup, and Write. All source types are also supported: HTTP, Exec, and Webhook — including column mapping, dedup, schedule, and update-existing settings.
+All action types are configurable through the sidebar: HTTP, Waterfall, Transform, Exec, Lookup, Write, and Script. All source types are also supported: HTTP, Exec, Webhook, and Script — including column mapping, dedup, schedule, and update-existing settings.
 
 > **Note:** The sidebar is a config editor only — it doesn't execute the pipeline. Use `rowbound run` via the CLI to execute. The `exec` action type can be configured in the sidebar but only executes via the CLI (no shell access in Apps Script).
 

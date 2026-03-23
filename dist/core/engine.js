@@ -5,6 +5,7 @@ import { extractValue } from "./extractor.js";
 import { httpRequest } from "./http-client.js";
 import { executeLookup } from "./lookup.js";
 import { RateLimiter } from "./rate-limiter.js";
+import { executeScriptAction, resolveScript } from "./script.js";
 import { resolveObject, resolveTemplate, } from "./template.js";
 import { executeWaterfall } from "./waterfall.js";
 import { executeWrite } from "./write-action.js";
@@ -239,6 +240,21 @@ export async function runPipeline(options) {
                         spreadsheetId: ref.spreadsheetId,
                         dryRun,
                         onMissing,
+                    });
+                }
+                else if (action.type === "script") {
+                    const sa = action;
+                    const scriptDef = resolveScript(sa.script, config, null);
+                    if (!scriptDef) {
+                        throw new Error(`Script "${sa.script}" not found`);
+                    }
+                    const resolvedArgs = (sa.args ?? []).map((a) => resolveTemplate(a, context, onMissing));
+                    value = await executeScriptAction(scriptDef, resolvedArgs, {
+                        env,
+                        timeout: sa.timeout,
+                        signal,
+                        extract: sa.extract,
+                        onError: sa.onError,
                     });
                 }
                 if (value !== null) {

@@ -28,6 +28,18 @@ export interface CellUpdate {
 /** Error handling config: maps error codes to actions */
 export type OnErrorConfig = Record<string, string | { write: string }>;
 
+// ---------------------------------------------------------------------------
+// Scripts — reusable code blocks
+// ---------------------------------------------------------------------------
+
+/** A reusable script definition stored in the config */
+export interface ScriptDef {
+  /** Runtime to execute the script with */
+  runtime: "bash" | "python3" | "node";
+  /** The script code (multi-line, stored with real newlines) */
+  code: string;
+}
+
 /** HTTP enrichment action */
 export interface HttpAction {
   id: string;
@@ -184,8 +196,27 @@ export interface WebhookSource {
   updateExisting?: boolean;
 }
 
+/** Script source: runs a named script and creates rows from JSON output */
+export interface ScriptSource {
+  id: string;
+  type: "script";
+  /** Name of a script defined in the scripts section */
+  script: string;
+  /** Arguments passed to the script. Supports {{env.X}} templates. */
+  args?: string[];
+  /** JSONPath to extract the array from the script output */
+  extract?: string;
+  /** Column mappings: { "Header": "$.field" } — JSONPath per element */
+  columns: Record<string, string>;
+  dedup?: string;
+  updateExisting?: boolean;
+  schedule?: string;
+  timeout?: number;
+  onError?: OnErrorConfig;
+}
+
 /** Union of all source types */
-export type Source = HttpSource | ExecSource | WebhookSource;
+export type Source = HttpSource | ExecSource | WebhookSource | ScriptSource;
 
 /** Result of executing a source */
 export interface SourceResult {
@@ -200,6 +231,22 @@ export interface SourceResult {
 // Actions — enrich existing rows
 // ---------------------------------------------------------------------------
 
+/** Script action: runs a named script from the scripts section */
+export interface ScriptAction {
+  id: string;
+  type: "script";
+  target: string;
+  when?: string;
+  /** Name of a script defined in the scripts section */
+  script: string;
+  /** Arguments passed to the script. Supports {{row.x}} and {{env.X}} templates. */
+  args?: string[];
+  /** Optional JSONPath to extract a value from the script's JSON output */
+  extract?: string;
+  timeout?: number;
+  onError?: OnErrorConfig;
+}
+
 /** Union of all action types */
 export type Action =
   | HttpAction
@@ -207,7 +254,8 @@ export type Action =
   | TransformAction
   | ExecAction
   | LookupAction
-  | WriteAction;
+  | WriteAction
+  | ScriptAction;
 
 /** Global pipeline execution settings */
 export interface PipelineSettings {
@@ -222,6 +270,7 @@ export interface TabConfig {
   name: string;
   enabled?: boolean; // default true — set to false to stop all processing
   columns: Record<string, string>; // { rangeId: headerName }
+  scripts?: Record<string, ScriptDef>; // tab-level scripts (override global)
   sources?: Source[];
   actions: Action[];
   settings?: PipelineSettings; // per-tab settings override
@@ -233,6 +282,7 @@ export interface PipelineConfig {
   tabs?: Record<string, TabConfig>; // v2: { GID: TabConfig }
   // Legacy v1 fields (kept for migration)
   columns?: Record<string, string>;
+  scripts?: Record<string, ScriptDef>; // global scripts
   sources?: Source[];
   actions: Action[];
   settings: PipelineSettings;

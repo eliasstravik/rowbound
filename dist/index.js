@@ -13,6 +13,7 @@ export { cleanupOrphanedRanges, reconcile, } from "./core/reconcile.js";
 export { formatAge, formatDuration, formatRunDetail, formatRunList, } from "./core/run-format.js";
 export { createRunState, listRuns, pruneRuns, readRunState, writeRunState, } from "./core/run-state.js";
 export { createRunTracker } from "./core/run-tracker.js";
+export { executeScript, executeScriptAction, resolveScript, } from "./core/script.js";
 export { executeSource, executeWebhookSource, } from "./core/source.js";
 export { isSourceDue, readScheduleState, updateScheduleEntry, } from "./core/source-schedule.js";
 export { resolveObject, resolveTemplate } from "./core/template.js";

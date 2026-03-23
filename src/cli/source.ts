@@ -3,6 +3,7 @@ import { SheetsAdapter } from "../adapters/sheets/sheets-adapter.js";
 import { buildSafeEnv } from "../core/env.js";
 import { RateLimiter } from "../core/rate-limiter.js";
 import { reconcile } from "../core/reconcile.js";
+import { resolveScript } from "../core/script.js";
 import { executeSource } from "../core/source.js";
 import {
   readScheduleState,
@@ -112,6 +113,8 @@ export function registerSource(program: Command): void {
               ref,
               env,
               dryRun: opts.dryRun,
+              resolveScript: (name: string) =>
+                resolveScript(name, reconciled.config, tabConfig),
               rateLimiter,
               retryAttempts: reconciled.config.settings.retryAttempts ?? 0,
               retryBackoff: reconciled.config.settings.retryBackoff,

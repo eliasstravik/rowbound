@@ -1,11 +1,13 @@
 import type { RateLimiter } from "./rate-limiter.js";
-import type { Adapter, SheetRef, Source, SourceResult, WebhookSource } from "./types.js";
+import type { Adapter, ScriptDef, SheetRef, Source, SourceResult, WebhookSource } from "./types.js";
 export interface SourceOptions {
     adapter: Adapter;
     ref: SheetRef;
     env: Record<string, string>;
     dryRun?: boolean;
     signal?: AbortSignal;
+    /** Resolve a script name to its definition. Required for script sources. */
+    resolveScript?: (name: string) => ScriptDef | null;
     rateLimiter?: RateLimiter;
     retryAttempts?: number;
     retryBackoff?: string;

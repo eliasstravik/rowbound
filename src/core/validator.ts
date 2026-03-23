@@ -7,6 +7,8 @@ import type {
   HttpSource,
   LookupAction,
   PipelineConfig,
+  ScriptAction,
+  ScriptSource,
   Source,
   TransformAction,
   WaterfallAction,
@@ -31,6 +33,7 @@ const VALID_ACTION_TYPES = new Set([
   "exec",
   "lookup",
   "write",
+  "script",
 ]);
 
 /** Known retry backoff strategies. */
@@ -432,13 +435,46 @@ export function validateConfig(config: PipelineConfig): ValidationResult {
           );
         }
       }
+    } else if (action.type === "script") {
+      const scriptAction = action as ScriptAction;
+      if (!scriptAction.script) {
+        errors.push(`${label}: script action missing 'script' name`);
+      }
+      if (scriptAction.extract && !isValidJsonPath(scriptAction.extract)) {
+        errors.push(
+          `${label}: invalid JSONPath in 'extract': "${scriptAction.extract}"`,
+        );
+      }
+      if (
+        scriptAction.timeout !== undefined &&
+        (typeof scriptAction.timeout !== "number" || scriptAction.timeout <= 0)
+      ) {
+        errors.push(
+          `${label}: 'timeout' must be a positive number (got ${JSON.stringify(scriptAction.timeout)})`,
+        );
+      }
     }
   }
 
-  // 8. Source validation
+  // 8. Script definitions validation
+  const VALID_RUNTIMES = new Set(["bash", "python3", "node"]);
+  const allScripts = config.scripts ?? {};
+  for (const [name, def] of Object.entries(allScripts)) {
+    const label = `Script "${name}"`;
+    if (!def.runtime || !VALID_RUNTIMES.has(def.runtime)) {
+      errors.push(
+        `${label}: invalid runtime "${def.runtime}" (expected: bash, python3, node)`,
+      );
+    }
+    if (!def.code || typeof def.code !== "string" || def.code.trim() === "") {
+      errors.push(`${label}: 'code' must be a non-empty string`);
+    }
+  }
+
+  // 9. Source validation
   const sources: Source[] = config.sources ?? [];
   const sourceIds = new Set<string>();
-  const VALID_SOURCE_TYPES = new Set(["http", "exec", "webhook"]);
+  const VALID_SOURCE_TYPES = new Set(["http", "exec", "webhook", "script"]);
   const VALID_SCHEDULES = new Set(["manual", "hourly", "daily", "weekly"]);
 
   for (const source of sources) {
@@ -514,9 +550,21 @@ export function validateConfig(config: PipelineConfig): ValidationResult {
       }
     }
 
+    if (source.type === "script") {
+      const scriptSource = source as ScriptSource;
+      if (!scriptSource.script) {
+        errors.push(`${label}: script source missing 'script' name`);
+      }
+      if (scriptSource.extract && !isValidJsonPath(scriptSource.extract)) {
+        errors.push(
+          `${label}: invalid JSONPath in 'extract': "${scriptSource.extract}"`,
+        );
+      }
+    }
+
     // Validate schedule if present (for non-webhook sources)
     if (source.type !== "webhook") {
-      const s = source as HttpSource | ExecSource;
+      const s = source as HttpSource | ExecSource | ScriptSource;
       if (
         s.schedule &&
         !VALID_SCHEDULES.has(s.schedule) &&

@@ -5,6 +5,7 @@ import { extractValue } from "./extractor.js";
 import { httpRequest } from "./http-client.js";
 import { executeLookup } from "./lookup.js";
 import { RateLimiter } from "./rate-limiter.js";
+import { executeScriptAction, resolveScript } from "./script.js";
 import {
   type OnMissingCallback,
   resolveObject,
@@ -20,6 +21,7 @@ import type {
   LookupAction,
   PipelineConfig,
   Row,
+  ScriptAction,
   SheetRef,
   WriteAction,
 } from "./types.js";
@@ -371,6 +373,22 @@ export async function runPipeline(
             spreadsheetId: ref.spreadsheetId,
             dryRun,
             onMissing,
+          });
+        } else if (action.type === "script") {
+          const sa = action as ScriptAction;
+          const scriptDef = resolveScript(sa.script, config, null);
+          if (!scriptDef) {
+            throw new Error(`Script "${sa.script}" not found`);
+          }
+          const resolvedArgs = (sa.args ?? []).map((a) =>
+            resolveTemplate(a, context, onMissing),
+          );
+          value = await executeScriptAction(scriptDef, resolvedArgs, {
+            env,
+            timeout: sa.timeout,
+            signal,
+            extract: sa.extract,
+            onError: sa.onError,
           });
         }
 

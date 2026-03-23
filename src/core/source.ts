@@ -3,6 +3,7 @@ import { executeCommand } from "./exec.js";
 import { extractValue } from "./extractor.js";
 import { httpRequest } from "./http-client.js";
 import type { RateLimiter } from "./rate-limiter.js";
+import { executeScript as executeScriptFn } from "./script.js";
 import { resolveObject, resolveTemplate } from "./template.js";
 import type {
   Adapter,
@@ -11,6 +12,8 @@ import type {
   ExecutionContext,
   HttpSource,
   Row,
+  ScriptDef,
+  ScriptSource,
   SheetRef,
   Source,
   SourceResult,
@@ -23,6 +26,8 @@ export interface SourceOptions {
   env: Record<string, string>;
   dryRun?: boolean;
   signal?: AbortSignal;
+  /** Resolve a script name to its definition. Required for script sources. */
+  resolveScript?: (name: string) => ScriptDef | null;
   rateLimiter?: RateLimiter;
   retryAttempts?: number;
   retryBackoff?: string;
@@ -156,6 +161,7 @@ export async function executeSource(
     const execResult = await executeCommand(resolvedCommand, {
       timeout: execSource.timeout ?? 30_000,
       signal,
+      env: { ...process.env, ...env } as Record<string, string>,
     });
 
     if (execResult.exitCode !== 0) {
@@ -168,6 +174,37 @@ export async function executeSource(
     const parsed = parseSourceData(execResult.stdout, execSource.extract);
     if (parsed === null) {
       result.errors.push("Failed to parse command output as JSON array");
+      return result;
+    }
+    items = parsed;
+  } else if (source.type === "script") {
+    const scriptSource = source as ScriptSource;
+    if (!options.resolveScript) {
+      result.errors.push("Script resolution not available");
+      return result;
+    }
+    const scriptDef = options.resolveScript(scriptSource.script);
+    if (!scriptDef) {
+      result.errors.push(`Script "${scriptSource.script}" not found`);
+      return result;
+    }
+    const resolvedArgs = (scriptSource.args ?? []).map((a) =>
+      resolveTemplate(a, context),
+    );
+    const scriptResult = await executeScriptFn(scriptDef, resolvedArgs, {
+      env: { ...process.env, ...env } as Record<string, string>,
+      timeout: scriptSource.timeout ?? 30_000,
+      signal,
+    });
+    if (scriptResult.exitCode !== 0) {
+      result.errors.push(
+        `Script exited with code ${scriptResult.exitCode}: ${scriptResult.stderr}`,
+      );
+      return result;
+    }
+    const parsed = parseSourceData(scriptResult.stdout, scriptSource.extract);
+    if (parsed === null) {
+      result.errors.push("Failed to parse script output as JSON array");
       return result;
     }
     items = parsed;

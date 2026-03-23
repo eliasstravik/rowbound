@@ -15,6 +15,7 @@ function onOpen() {
     .createMenu('Rowbound')
     .addItem('Actions', 'openOverview')
     .addItem('Sources', 'openSources')
+    .addItem('Scripts', 'openScripts')
     .addItem('Settings', 'openPipelineSettings')
     .addToUi();
 }
@@ -33,6 +34,11 @@ function openOverview() {
 
 function openSources() {
   PropertiesService.getUserProperties().setProperty('rb_view', 'sources');
+  openSidebar_();
+}
+
+function openScripts() {
+  PropertiesService.getUserProperties().setProperty('rb_view', 'scripts');
   openSidebar_();
 }
 

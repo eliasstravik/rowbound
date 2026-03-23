@@ -1,7 +1,7 @@
 import type { Command } from "commander";
 import { SheetsAdapter } from "../adapters/sheets/sheets-adapter.js";
 import { getTabConfig, resolveTabGid } from "../core/tab-resolver.js";
-import type { Action } from "../core/types.js";
+import type { Action, ScriptDef } from "../core/types.js";
 import { type ValidationResult, validateConfig } from "../core/validator.js";
 import { error, warn } from "./format.js";
 
@@ -295,6 +295,137 @@ export function registerConfig(program: Command): void {
         }
       },
     );
+
+  // rowbound config add-script <sheetId> --name <name> --json '<script JSON>' [--tab <name>]
+  configCmd
+    .command("add-script")
+    .description("Add a script to the pipeline config")
+    .argument("<sheetId>", "Google Sheets spreadsheet ID")
+    .requiredOption("--name <name>", "Script name")
+    .requiredOption("--json <scriptJson>", "Script definition as JSON string")
+    .option("--tab <name>", "Sheet tab name")
+    .action(
+      async (
+        sheetId: string,
+        opts: { tab?: string; name: string; json: string },
+      ) => {
+        const adapter = new SheetsAdapter();
+        const ref = { spreadsheetId: sheetId, sheetName: opts.tab || "Sheet1" };
+
+        try {
+          let scriptDef: ScriptDef;
+          try {
+            scriptDef = JSON.parse(opts.json) as ScriptDef;
+          } catch {
+            console.error(error("Invalid JSON for script definition."));
+            process.exitCode = 1;
+            return;
+          }
+
+          if (!scriptDef.runtime || !scriptDef.code) {
+            console.error(
+              error("Script must have at least 'runtime' and 'code' fields."),
+            );
+            process.exitCode = 1;
+            return;
+          }
+
+          const existing = await adapter.readConfig(ref);
+          if (!existing) {
+            console.error(
+              error(
+                "No Rowbound config found. Run 'rowbound init <sheetId>' first.",
+              ),
+            );
+            process.exitCode = 1;
+            return;
+          }
+
+          if (existing.tabs) {
+            // v2: add to the specific tab
+            const { gid, tab } = getTabConfig(existing, opts.tab);
+            if (!tab.scripts) tab.scripts = {};
+            if (tab.scripts[opts.name]) {
+              console.error(
+                error(`Script with name "${opts.name}" already exists.`),
+              );
+              process.exitCode = 1;
+              return;
+            }
+            tab.scripts[opts.name] = scriptDef;
+            existing.tabs[gid] = tab;
+          } else {
+            // v1 fallback
+            if (!existing.scripts) existing.scripts = {};
+            if (existing.scripts[opts.name]) {
+              console.error(
+                error(`Script with name "${opts.name}" already exists.`),
+              );
+              process.exitCode = 1;
+              return;
+            }
+            existing.scripts[opts.name] = scriptDef;
+          }
+
+          await adapter.writeConfig(ref, existing);
+          console.log(`Added script "${opts.name}" (${scriptDef.runtime})`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(error("Failed to add script:"), msg);
+          process.exitCode = 1;
+        }
+      },
+    );
+
+  // rowbound config remove-script <sheetId> --name <name> [--tab <name>]
+  configCmd
+    .command("remove-script")
+    .description("Remove a script from the pipeline config")
+    .argument("<sheetId>", "Google Sheets spreadsheet ID")
+    .requiredOption("--name <name>", "Script name to remove")
+    .option("--tab <name>", "Sheet tab name")
+    .action(async (sheetId: string, opts: { tab?: string; name: string }) => {
+      const adapter = new SheetsAdapter();
+      const ref = { spreadsheetId: sheetId, sheetName: opts.tab || "Sheet1" };
+
+      try {
+        const existing = await adapter.readConfig(ref);
+        if (!existing) {
+          console.error(
+            error(
+              "No Rowbound config found. Run 'rowbound init <sheetId>' first.",
+            ),
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        if (existing.tabs) {
+          const { gid, tab } = getTabConfig(existing, opts.tab);
+          if (!tab.scripts || !tab.scripts[opts.name]) {
+            console.error(error(`Script "${opts.name}" not found in config.`));
+            process.exitCode = 1;
+            return;
+          }
+          delete tab.scripts[opts.name];
+          existing.tabs[gid] = tab;
+        } else {
+          if (!existing.scripts || !existing.scripts[opts.name]) {
+            console.error(error(`Script "${opts.name}" not found in config.`));
+            process.exitCode = 1;
+            return;
+          }
+          delete existing.scripts[opts.name];
+        }
+
+        await adapter.writeConfig(ref, existing);
+        console.log(`Removed script "${opts.name}".`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(error("Failed to remove script:"), msg);
+        process.exitCode = 1;
+      }
+    });
 
   // rowbound config set <sheetId> [--concurrency <n>] [--rate-limit <n>] [--retry-attempts <n>] [--retry-backoff <strategy>] [--tab <name>]
   configCmd

@@ -46,6 +46,13 @@ export {
 } from "./core/run-state.js";
 export { createRunTracker } from "./core/run-tracker.js";
 export {
+  executeScript,
+  executeScriptAction,
+  resolveScript,
+  type ScriptExecOptions,
+  type ScriptExecResult,
+} from "./core/script.js";
+export {
   executeSource,
   executeWebhookSource,
   type SourceOptions,
@@ -71,6 +78,9 @@ export type {
   PipelineConfig,
   PipelineSettings,
   Row,
+  ScriptAction,
+  ScriptDef,
+  ScriptSource,
   SheetRef,
   Source,
   SourceResult,

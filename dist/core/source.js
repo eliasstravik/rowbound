@@ -2,6 +2,7 @@ import { forceText } from "./cell-utils.js";
 import { executeCommand } from "./exec.js";
 import { extractValue } from "./extractor.js";
 import { httpRequest } from "./http-client.js";
+import { executeScript as executeScriptFn } from "./script.js";
 import { resolveObject, resolveTemplate } from "./template.js";
 /**
  * Extract a value from an item using a JSONPath-like column mapping.
@@ -112,6 +113,7 @@ export async function executeSource(source, options) {
         const execResult = await executeCommand(resolvedCommand, {
             timeout: execSource.timeout ?? 30_000,
             signal,
+            env: { ...process.env, ...env },
         });
         if (execResult.exitCode !== 0) {
             result.errors.push(`Command exited with code ${execResult.exitCode}: ${execResult.stderr}`);
@@ -120,6 +122,34 @@ export async function executeSource(source, options) {
         const parsed = parseSourceData(execResult.stdout, execSource.extract);
         if (parsed === null) {
             result.errors.push("Failed to parse command output as JSON array");
+            return result;
+        }
+        items = parsed;
+    }
+    else if (source.type === "script") {
+        const scriptSource = source;
+        if (!options.resolveScript) {
+            result.errors.push("Script resolution not available");
+            return result;
+        }
+        const scriptDef = options.resolveScript(scriptSource.script);
+        if (!scriptDef) {
+            result.errors.push(`Script "${scriptSource.script}" not found`);
+            return result;
+        }
+        const resolvedArgs = (scriptSource.args ?? []).map((a) => resolveTemplate(a, context));
+        const scriptResult = await executeScriptFn(scriptDef, resolvedArgs, {
+            env: { ...process.env, ...env },
+            timeout: scriptSource.timeout ?? 30_000,
+            signal,
+        });
+        if (scriptResult.exitCode !== 0) {
+            result.errors.push(`Script exited with code ${scriptResult.exitCode}: ${scriptResult.stderr}`);
+            return result;
+        }
+        const parsed = parseSourceData(scriptResult.stdout, scriptSource.extract);
+        if (parsed === null) {
+            result.errors.push("Failed to parse script output as JSON array");
             return result;
         }
         items = parsed;

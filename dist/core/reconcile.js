@@ -29,6 +29,8 @@ export async function reconcile(adapter, ref, config) {
             [tabGid]: {
                 name: targetName,
                 columns: { ...v1Columns },
+                ...(config.scripts ? { scripts: { ...config.scripts } } : {}),
+                ...(config.sources ? { sources: [...config.sources] } : {}),
                 actions: [...v1Actions],
             },
         };
@@ -43,6 +45,8 @@ export async function reconcile(adapter, ref, config) {
                 name: tab.name,
                 ...(tab.enabled !== undefined ? { enabled: tab.enabled } : {}),
                 columns: { ...tab.columns },
+                ...(tab.scripts ? { scripts: { ...tab.scripts } } : {}),
+                ...(tab.sources ? { sources: [...tab.sources] } : {}),
                 actions: [...tab.actions],
                 ...(tab.settings ? { settings: { ...tab.settings } } : {}),
             };

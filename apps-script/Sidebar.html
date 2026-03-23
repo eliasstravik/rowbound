@@ -204,11 +204,13 @@ body {
 .badge-exec      { background: #fce8e6; color: #d93025; }
 .badge-lookup    { background: #f3e8fd; color: #8430ce; }
 .badge-write     { background: #e0f7fa; color: #00796b; }
+.badge-script    { background: #e8eaf6; color: #3949ab; }
 
 /* Source type badges */
 .badge-src-http    { background: #e8f0fe; color: #1a73e8; }
 .badge-src-exec    { background: #fce8e6; color: #d93025; }
 .badge-src-webhook { background: #e6f4ea; color: #188038; }
+.badge-src-script  { background: #e8eaf6; color: #3949ab; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    OVERVIEW LIST
@@ -322,7 +324,9 @@ var state = {
   editingAction: null,
   originalAction: null,
   editingSource: null,
-  originalSource: null
+  originalSource: null,
+  editingScript: null,
+  originalScript: null
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -400,11 +404,97 @@ function setSources(sources) {
   }
 }
 
+function getScripts() {
+  if (!state.config) return {};
+  var tc = getTabConfig();
+  if (tc && tc.scripts) return tc.scripts;
+  return state.config.scripts || {};
+}
+
+function setScripts(scripts) {
+  if (!state.config) return;
+  var c = state.config;
+  if (c.tabs && state.columnInfo) {
+    var gid = state.columnInfo.tabGid;
+    if (!c.tabs[gid]) {
+      c.tabs[gid] = { name: state.columnInfo.tabName, columns: {}, actions: [], sources: [], scripts: {} };
+    }
+    c.tabs[gid].scripts = scripts;
+  } else {
+    c.scripts = scripts;
+  }
+}
+
+function getScriptNames() {
+  var scripts = getScripts();
+  return Object.keys(scripts);
+}
+
+function buildScriptSelect(name, current) {
+  var names = getScriptNames();
+  var h = '<select class="field-select" name="' + esc(name) + '">';
+  h += '<option value="">-- Select script --</option>';
+  for (var i = 0; i < names.length; i++) {
+    h += '<option value="' + esc(names[i]) + '"' + (names[i] === current ? ' selected' : '') + '>' +
+         esc(names[i]) + '</option>';
+  }
+  return h + '</select>';
+}
+
+function buildArgsList(name, args) {
+  args = args || [];
+  var h = '<div class="kv-list" data-args="' + esc(name) + '">';
+  if (args.length === 0) {
+    h += argsRowHtml('');
+  } else {
+    for (var i = 0; i < args.length; i++) {
+      h += argsRowHtml(args[i]);
+    }
+  }
+  h += '<button class="kv-add" onclick="addArgsRow(this)">+ Add Arg</button>';
+  h += '</div>';
+  return h;
+}
+
+function argsRowHtml(val) {
+  return '<div class="kv-row">' +
+    '<input value="' + esc(val) + '" placeholder="Argument value" data-arg-val style="flex:1">' +
+    '<button class="kv-remove" onclick="removeKvRow(this)">&#215;</button></div>';
+}
+
+function addArgsRow(btn) {
+  var list = btn.parentElement;
+  var row = document.createElement('div');
+  row.className = 'kv-row';
+  var vi = document.createElement('input');
+  vi.placeholder = 'Argument value';
+  vi.setAttribute('data-arg-val', '');
+  vi.style.flex = '1';
+  var rb = document.createElement('button');
+  rb.className = 'kv-remove'; rb.textContent = '\u00d7';
+  rb.onclick = function() { removeKvRow(rb); };
+  row.appendChild(vi); row.appendChild(rb);
+  list.insertBefore(row, btn);
+}
+
+function readArgsList(name) {
+  var list = document.querySelector('[data-args="' + (name || 'args') + '"]');
+  if (!list) return [];
+  var rows = list.querySelectorAll('.kv-row');
+  var result = [];
+  for (var i = 0; i < rows.length; i++) {
+    var v = rows[i].querySelector('[data-arg-val]').value.trim();
+    if (v) result.push(v);
+  }
+  return result;
+}
+
 function sourceSummary(s) {
   switch (s.type) {
     case 'http': return (s.method || 'GET') + ' ' + (s.url || '');
     case 'exec': return s.command ? s.command.substring(0, 60) : '';
     case 'webhook': return Object.keys(s.columns || {}).length + ' columns mapped';
+    case 'script': return s.script || '';
     default: return '';
   }
 }
@@ -452,6 +542,7 @@ function actionSummary(a) {
     case 'exec': return a.command || '';
     case 'lookup': return (a.sourceTab || '?') + ' \u2192 ' + (a.returnColumn || '?');
     case 'write': return (a.mode || 'append') + ' \u2192 ' + (a.destTab || '?');
+    case 'script': return a.script || '';
     default: return '';
   }
 }
@@ -482,18 +573,23 @@ function ensureConfig() {
       version: '2',
       tabs: {},
       actions: [],
+      scripts: {},
       settings: { concurrency: 1, rateLimit: 5, retryAttempts: 2, retryBackoff: 'exponential' }
     };
     if (state.columnInfo) {
       state.config.tabs[state.columnInfo.tabGid] = {
         name: state.columnInfo.tabName,
         columns: {},
-        actions: []
+        actions: [],
+        scripts: {}
       };
     }
   }
   if (!state.config.settings) {
     state.config.settings = { concurrency: 1, rateLimit: 5, retryAttempts: 2, retryBackoff: 'exponential' };
+  }
+  if (!state.config.scripts) {
+    state.config.scripts = {};
   }
 }
 
@@ -620,6 +716,7 @@ function showOverview() {
   safeSetHTML(document.getElementById('content'), h);
   renderFooter([
     { label: 'Sources', cls: 'btn-text', action: 'showSources()' },
+    { label: 'Scripts', cls: 'btn-text', action: 'showScripts()' },
     'spacer',
     { label: '+ New Action', cls: 'btn-primary', action: 'showCreate()' }
   ]);
@@ -660,6 +757,7 @@ function showSources() {
   safeSetHTML(document.getElementById('content'), h);
   renderFooter([
     { label: 'Actions', cls: 'btn-text', action: 'showOverview()' },
+    { label: 'Scripts', cls: 'btn-text', action: 'showScripts()' },
     'spacer',
     { label: '+ New Source', cls: 'btn-primary', action: 'showCreateSource()' }
   ]);
@@ -718,7 +816,7 @@ function renderSourceEditorContent() {
   h += '<div class="section"><div class="section-title">Source</div>';
   h += field('ID', '<input class="field-input" name="src_id" value="' + esc(s.id) + '">', 'Unique identifier');
   h += field('Type', '<select class="field-select" name="src_type" onchange="onSourceTypeChange(this.value)">' +
-    opt('http', s.type) + opt('exec', s.type) + opt('webhook', s.type) + '</select>');
+    opt('http', s.type) + opt('exec', s.type) + opt('webhook', s.type) + opt('script', s.type) + '</select>');
   h += '</div>';
 
   // Type-specific fields
@@ -748,6 +846,18 @@ function renderSourceEditorContent() {
   } else if (s.type === 'exec') {
     h += '<div class="section"><div class="section-title">Command</div>';
     h += field('Shell Command', '<textarea class="field-textarea" name="src_command" placeholder="curl https://...">' + esc(s.command || '') + '</textarea>');
+    h += field('Extract (JSONPath)', '<input class="field-input" name="src_extract" value="' + esc(s.extract || '') + '" placeholder="$.results">',
+      'Optional \u2014 extract array from JSON output');
+    h += field('Timeout (ms)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 30000) + '">');
+    h += '</div>';
+  } else if (s.type === 'script') {
+    h += '<div class="section"><div class="section-title">Script</div>';
+    h += field('Script Name', buildScriptSelect('src_script', s.script), 'Select a script defined in the Scripts section');
+    h += '</div>';
+    h += '<div class="section"><div class="section-title">Arguments</div>';
+    h += buildArgsList('src_args', s.args);
+    h += '</div>';
+    h += '<div class="section"><div class="section-title">Response</div>';
     h += field('Extract (JSONPath)', '<input class="field-input" name="src_extract" value="' + esc(s.extract || '') + '" placeholder="$.results">',
       'Optional \u2014 extract array from JSON output');
     h += field('Timeout (ms)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 30000) + '">');
@@ -787,11 +897,13 @@ function onSourceTypeChange(newType) {
   s.type = newType;
   delete s.method; delete s.url; delete s.headers; delete s.body;
   delete s.extract; delete s.extractPath; delete s.command; delete s.timeout;
+  delete s.script; delete s.args;
   s.columns = readKvList('src_columns');
   s.dedup = getVal('src_dedup') || undefined;
   s.updateExisting = getVal('src_updateExisting') === 'true';
   if (newType === 'http') { s.method = 'POST'; s.url = ''; s.extract = '$'; }
   if (newType === 'exec') { s.command = ''; }
+  if (newType === 'script') { s.script = ''; s.args = []; }
   renderSourceEditorContent();
 }
 
@@ -815,6 +927,14 @@ function readFormSource() {
     if (ext) s.extract = ext;
     var timeout = parseInt(getVal('src_timeout'));
     if (timeout && timeout !== 30000) s.timeout = timeout;
+  } else if (type === 'script') {
+    s.script = getVal('src_script');
+    var sArgs = readArgsList('src_args');
+    if (sArgs.length > 0) s.args = sArgs;
+    var sExt = getVal('src_extract').trim();
+    if (sExt) s.extract = sExt;
+    var sTimeout = parseInt(getVal('src_timeout'));
+    if (sTimeout && sTimeout !== 30000) s.timeout = sTimeout;
   }
 
   s.columns = readKvList('src_columns');
@@ -1039,7 +1159,7 @@ function showCreatePrompt(col) {
    TYPE-SPECIFIC FORM BUILDERS
    ═══════════════════════════════════════════════════════════════════════════ */
 function buildTypeSelect(current) {
-  var types = ['http', 'waterfall', 'transform', 'exec', 'lookup', 'write'];
+  var types = ['http', 'waterfall', 'transform', 'exec', 'lookup', 'write', 'script'];
   var h = '<select class="field-select" name="type" onchange="onTypeChange(this.value)">';
   for (var i = 0; i < types.length; i++) {
     h += '<option value="' + types[i] + '"' + (types[i] === current ? ' selected' : '') + '>' +
@@ -1056,6 +1176,7 @@ function buildTypeFields(a) {
     case 'exec': return buildExecFields(a);
     case 'lookup': return buildLookupFields(a);
     case 'write': return buildWriteFields(a);
+    case 'script': return buildScriptFields(a);
     default: return '';
   }
 }
@@ -1201,6 +1322,24 @@ function buildWriteFields(a) {
   h += field('Expand Path', '<input class="field-input" name="expandPath" value="' + esc(a.expandPath || '') + '" placeholder="$.items">',
     'JSONPath to extract array from expanded value');
   h += '</div>';
+  return h;
+}
+
+function buildScriptFields(a) {
+  var h = '<div class="section"><div class="section-title">Script</div>';
+  h += field('Script Name', buildScriptSelect('script', a.script), 'Select a script defined in the Scripts section');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Arguments</div>';
+  h += buildArgsList('args', a.args);
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Response</div>';
+  h += field('Extract (JSONPath)', '<input class="field-input" name="extract" value="' + esc(a.extract || '') + '" placeholder="$.result">',
+    'Optional \u2014 extract from JSON output');
+  h += field('Timeout (ms)', '<input class="field-input" type="number" name="timeout" value="' + esc(a.timeout || 30000) + '">');
+  h += '</div>';
+
   return h;
 }
 
@@ -1397,6 +1536,16 @@ function readFormAction() {
       var expandPath = getVal('expandPath').trim();
       if (expandPath) a.expandPath = expandPath;
       break;
+
+    case 'script':
+      a.script = getVal('script');
+      var args = readArgsList('args');
+      if (args.length > 0) a.args = args;
+      var ext = getVal('extract').trim();
+      if (ext) a.extract = ext;
+      var timeout = parseInt(getVal('timeout'));
+      if (timeout && timeout !== 30000) a.timeout = timeout;
+      break;
   }
 
   return a;
@@ -1439,6 +1588,7 @@ function onTypeChange(newType) {
   delete a.matchOperator; delete a.returnColumn; delete a.matchMode;
   delete a.destTab; delete a.columns; delete a.mode;
   delete a.upsertMatch; delete a.expand; delete a.expandPath;
+  delete a.script; delete a.args;
   // Set defaults per type
   if (newType === 'http') { a.method = 'GET'; a.url = ''; a.extract = ''; }
   if (newType === 'waterfall') { a.providers = []; }
@@ -1446,6 +1596,7 @@ function onTypeChange(newType) {
   if (newType === 'exec') { a.command = ''; }
   if (newType === 'lookup') { a.sourceTab = ''; a.matchColumn = ''; a.matchValue = ''; a.returnColumn = ''; }
   if (newType === 'write') { a.destTab = ''; a.columns = {}; }
+  if (newType === 'script') { a.script = ''; a.args = []; }
   renderEditorContent();
 }
 
@@ -1565,6 +1716,153 @@ function removeProvider(idx) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   VIEW: SCRIPTS
+   ═══════════════════════════════════════════════════════════════════════════ */
+function showScripts() {
+  state.view = 'scripts';
+  renderHeader('Scripts', { showSettings: true });
+
+  var scripts = getScripts();
+  var names = Object.keys(scripts);
+  var h = '';
+
+  if (names.length === 0) {
+    h += '<div class="empty-state">';
+    h += '<div class="empty-state-title">No scripts configured</div>';
+    h += '<p>Scripts are reusable code blocks that can be referenced from actions and sources.</p>';
+    h += '</div>';
+  } else {
+    for (var i = 0; i < names.length; i++) {
+      var name = names[i];
+      var sc = scripts[name];
+      var snippet = (sc.code || '').substring(0, 80).replace(/\n/g, ' ');
+      h += '<div class="action-item" onclick="editScript(\'' + esc(name).replace(/'/g, "\\'") + '\')">';
+      h += '<div class="action-item-header">';
+      h += '<span class="badge badge-script">' + esc(sc.runtime || 'bash') + '</span>';
+      h += '<span class="action-item-title">' + esc(name) + '</span>';
+      h += '</div>';
+      h += '<div class="action-item-meta" style="font-family:monospace;font-size:11px">' + esc(snippet) + (sc.code && sc.code.length > 80 ? '...' : '') + '</div>';
+      h += '</div>';
+    }
+  }
+  safeSetHTML(document.getElementById('content'), h);
+  renderFooter([
+    { label: 'Actions', cls: 'btn-text', action: 'showOverview()' },
+    { label: 'Sources', cls: 'btn-text', action: 'showSources()' },
+    'spacer',
+    { label: '+ New Script', cls: 'btn-primary', action: 'showCreateScript()' }
+  ]);
+}
+
+function showCreateScript() {
+  state.view = 'scriptEditor';
+  var sc = { runtime: 'bash', code: '' };
+  state.editingScript = sc;
+  state.originalScript = null;
+  renderHeader('New Script', { back: 'showScripts()' });
+  renderScriptEditorContent('');
+  renderFooter([
+    { label: 'Cancel', cls: 'btn-secondary', action: 'showScripts()' },
+    'spacer',
+    { label: 'Create', cls: 'btn-primary', action: 'saveScript()' }
+  ]);
+}
+
+function editScript(name) {
+  state.view = 'scriptEditor';
+  var scripts = getScripts();
+  var sc = deepCopy(scripts[name] || { runtime: 'bash', code: '' });
+  state.editingScript = sc;
+  state.originalScript = name;
+  renderHeader('Script: ' + name, { back: 'showScripts()' });
+  renderScriptEditorContent(name);
+  renderFooter([
+    { label: 'Delete', cls: 'btn-danger', action: 'confirmDeleteScript()' },
+    'spacer',
+    { label: 'Cancel', cls: 'btn-secondary', action: 'showScripts()' },
+    { label: 'Save', cls: 'btn-primary', action: 'saveScript()' }
+  ]);
+}
+
+function renderScriptEditorContent(name) {
+  var sc = state.editingScript;
+  var h = '';
+
+  h += '<div class="section"><div class="section-title">Script</div>';
+  h += field('Name', '<input class="field-input" name="script_name" value="' + esc(name || '') + '" placeholder="e.g. claude_json">', 'Unique name to reference this script');
+  h += field('Runtime', '<select class="field-select" name="script_runtime">' +
+    opt('bash', sc.runtime) + opt('python3', sc.runtime) + opt('node', sc.runtime) + '</select>',
+    'Interpreter used to execute the script');
+  h += '</div>';
+
+  h += '<div class="section"><div class="section-title">Code</div>';
+  h += field('', '<textarea class="field-textarea" name="script_code" rows="12" style="min-height:200px;font-family:\'SFMono-Regular\',\'Roboto Mono\',Consolas,monospace;font-size:12px;line-height:1.5" placeholder="#!/bin/bash\n...">' +
+    esc(sc.code || '') + '</textarea>');
+  h += '</div>';
+
+  safeSetHTML(document.getElementById('content'), h);
+}
+
+function saveScript() {
+  var name = getVal('script_name').trim();
+  if (!name) { showToast('Script name is required', 'error'); return; }
+  var sc = {
+    runtime: getVal('script_runtime') || 'bash',
+    code: getVal('script_code') || ''
+  };
+  ensureConfig();
+  var scripts = getScripts();
+
+  // If renaming (editing and name changed), remove old key
+  if (state.originalScript && state.originalScript !== name) {
+    delete scripts[state.originalScript];
+  }
+
+  scripts[name] = sc;
+  setScripts(scripts);
+  persistConfig(state.originalScript ? 'Script updated' : 'Script created');
+  state.editingScript = deepCopy(sc);
+  state.originalScript = name;
+  showScripts();
+}
+
+function confirmDeleteScript() {
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  var dialog = document.createElement('div');
+  dialog.className = 'confirm-dialog';
+  var title = document.createElement('h3');
+  title.textContent = 'Delete Script';
+  var msg = document.createElement('p');
+  msg.textContent = 'Remove this script? Actions and sources referencing it will break.';
+  var btns = document.createElement('div');
+  btns.className = 'confirm-dialog-btns';
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = function() { overlay.remove(); };
+  var deleteBtn = document.createElement('button');
+  deleteBtn.className = 'btn btn-danger';
+  deleteBtn.textContent = 'Delete';
+  deleteBtn.onclick = function() {
+    overlay.remove();
+    if (!state.originalScript) { showScripts(); return; }
+    var scripts = getScripts();
+    delete scripts[state.originalScript];
+    setScripts(scripts);
+    persistConfig('Script deleted');
+    showScripts();
+  };
+  btns.appendChild(cancelBtn);
+  btns.appendChild(deleteBtn);
+  dialog.appendChild(title);
+  dialog.appendChild(msg);
+  dialog.appendChild(btns);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    PERSIST
    ═══════════════════════════════════════════════════════════════════════════ */
 function persistConfig(message) {
@@ -1595,6 +1893,7 @@ function init() {
     switch (data.initialView) {
       case 'overview': showOverview(); break;
       case 'sources': showSources(); break;
+      case 'scripts': showScripts(); break;
       case 'settings': showSettings(); break;
       default: showColumn(); break;
     }
