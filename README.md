@@ -74,10 +74,22 @@ Column names are automatically resolved to stable IDs when you run `rowbound syn
 
 ## Features
 
+### Sources — Create rows from external data
+- **HTTP sources** — fetch from any API, extract array from response, map columns via JSONPath
+- **Exec sources** — run shell commands, parse JSON output into rows
+- **Webhook sources** — accept inbound POST payloads, create rows in real-time
+- **Deduplication** — skip or update existing rows based on a match column
+- **Scheduling** — run sources manually, hourly, daily, or weekly
+
+### Actions — Enrich existing rows
 - **HTTP actions** — call any REST API with templated URLs, headers, and bodies; extract values with JSONPath
 - **Waterfall actions** — try multiple providers in order until one returns a result (e.g., Clearbit → Apollo → Hunter)
 - **Transform actions** — compute derived values with sandboxed JavaScript expressions
 - **Exec actions** — run shell commands and capture stdout
+- **Lookup actions** — pull data from other tabs by matching on a column value; cached per pipeline run
+- **Write actions** — push data to other tabs with column mapping; supports append, upsert, and array expansion via `expandPath`
+
+### Pipeline
 - **Conditional execution** — skip actions per-row with `when` expressions
 - **Smart skip** — automatically skips rows where the target cell already has a value
 - **Watch mode** — poll sheets on an interval or trigger runs via webhook
@@ -109,6 +121,8 @@ Column names are automatically resolved to stable IDs when you run `rowbound syn
 | `rowbound config validate <sheetId>` | Validate the pipeline config |
 | `rowbound runs [runId]` | List recent runs or view a specific run |
 | `rowbound runs clear` | Delete all run history |
+| `rowbound source run <sheetId>` | Run a source to create rows (`--source`, `--dry-run`) |
+| `rowbound source list <sheetId>` | List configured sources |
 | `rowbound env set <KEY=value>` | Store an API key globally |
 | `rowbound env remove <KEY>` | Remove a stored key |
 | `rowbound env list` | List stored keys (values masked) |
@@ -134,6 +148,8 @@ Rowbound exposes all pipeline operations as MCP tools. Add this to your Claude D
 | `init_pipeline` | Initialize a sheet with a default pipeline config |
 | `run_pipeline` | Run the enrichment pipeline |
 | `add_action` / `remove_action` / `update_action` | Manage pipeline actions |
+| `add_source` / `remove_source` / `update_source` | Manage data sources |
+| `run_source` | Execute a source to create rows |
 | `update_settings` | Update pipeline settings (concurrency, rate limit, retry) |
 | `sync_columns` | Sync the column registry with the current sheet state |
 | `get_config` / `validate_config` | Read or validate the pipeline config |
@@ -142,6 +158,69 @@ Rowbound exposes all pipeline operations as MCP tools. Add this to your Claude D
 | `start_watch` / `stop_watch` | Manage watch mode |
 | `preview_rows` | Read and display rows from the sheet |
 | `list_runs` / `get_run` | View pipeline run history |
+
+## Source Types
+
+Sources create rows from external data. They run before actions in the pipeline — new rows are created first, then actions enrich them on the next run.
+
+### http source
+
+Fetch from an API and create rows from the response.
+
+```json
+{
+  "id": "search_companies",
+  "type": "http",
+  "method": "POST",
+  "url": "https://api.blitz-api.ai/v2/search/company",
+  "headers": { "x-api-key": "{{env.BLITZ_API_KEY}}" },
+  "body": { "industry": "restaurants", "country_code": ["SE"] },
+  "extract": "$",
+  "extractPath": "$.results",
+  "columns": { "Title": "$.company_name", "Website": "$.website_url", "LinkedIn": "$.linkedin_url" },
+  "dedup": "Website",
+  "schedule": "daily"
+}
+```
+
+### exec source
+
+Run a shell command and parse JSON output into rows.
+
+```json
+{
+  "id": "import_leads",
+  "type": "exec",
+  "command": "curl -s https://api.example.com/leads",
+  "extract": "$.data",
+  "columns": { "Name": "$.name", "Email": "$.email" },
+  "dedup": "Email",
+  "updateExisting": true
+}
+```
+
+### webhook source
+
+Accept inbound POST payloads and create rows. Used with `rowbound watch`.
+
+```json
+{
+  "id": "form_submissions",
+  "type": "webhook",
+  "columns": { "Name": "$.name", "Email": "$.email", "Company": "$.company" },
+  "dedup": "Email"
+}
+```
+
+### Source options
+
+| Field | Description |
+|-------|-------------|
+| `columns` | Maps sheet column headers to JSONPath per item: `{ "Name": "$.name" }`. Use `$.nested.field` for nested data, or literal strings for static values. |
+| `extract` / `extractPath` | JSONPath to locate the array in the response. `extractPath` drills into a nested object first (e.g., `$.results` extracts from `{"results": [...]}`). |
+| `dedup` | Column header to deduplicate on. Existing rows with the same value are skipped. |
+| `updateExisting` | When `true` and `dedup` is set, update matched rows instead of skipping (default: `false`). |
+| `schedule` | `"manual"` (default), `"hourly"`, `"daily"`, or `"weekly"`. Watch mode checks schedules automatically. |
 
 ## Action Types
 
@@ -223,36 +302,48 @@ Run a shell command and capture stdout. Template values are shell-escaped.
 
 ### lookup
 
-Read data from another tab by matching a column value.
+Pull data from another tab by matching a column value. Source tab data is cached per pipeline run for performance.
 
 ```json
 {
-  "id": "get_email",
+  "id": "get_company_info",
   "type": "lookup",
-  "target": "email",
-  "sourceTab": "Contacts",
+  "target": "company_name",
+  "sourceTab": "Companies",
   "matchColumn": "Domain",
   "matchValue": "{{row.domain}}",
   "matchOperator": "equals",
-  "returnColumn": "Email",
+  "returnColumn": "Name",
   "matchMode": "first"
 }
 ```
 
+Use `"matchMode": "all"` to return all matches as a JSON array. Use `"matchOperator": "contains"` for substring matching.
+
 ### write
 
-Write or append data to another tab. Supports array expansion for one-to-many mappings.
+Push data to another tab with column mapping. Supports append, upsert, and array expansion.
 
 ```json
 {
-  "id": "archive_lead",
+  "id": "export_contacts",
   "type": "write",
-  "target": "archive_status",
-  "destTab": "Archive",
-  "columns": { "Name": "{{row.name}}", "Email": "{{row.email}}" },
-  "mode": "append"
+  "target": "export_status",
+  "destTab": "Contacts",
+  "columns": {
+    "Company": "{{row.company}}",
+    "Name": "{{item.name}}",
+    "Title": "{{item.title}}",
+    "Email": "{{item.email}}"
+  },
+  "expand": "{{row.contacts_json}}",
+  "expandPath": "$.contacts"
 }
 ```
+
+- **append** (default) — always create new rows
+- **upsert** — update existing rows if `upsertMatch` column matches, otherwise append
+- **expand** + **expandPath** — expand a JSON array into multiple rows; use `{{item.field}}` in column templates to access element data
 
 ### Error handling
 
@@ -280,13 +371,14 @@ Rowbound includes an Apps Script sidebar that lets you configure actions directl
 ### Usage
 
 - **Rowbound → Actions** — view all configured actions, reorder them, or create new ones
+- **Rowbound → Sources** — view and manage data sources (http, exec, webhook) with type-specific editors
 - **Rowbound → Settings** — edit pipeline settings (concurrency, rate limit, retries, backoff)
-- Click any action to edit its full config: type, run conditions, request details, headers, extract path, error handling
+- Click any action or source to edit its full config
 - The column dropdown (●/○ indicators) lets you navigate between columns and see which ones have actions
 
-### Supported action types
+### Supported types
 
-All action types are configurable through the sidebar: HTTP, Waterfall, Transform, Exec, Lookup, and Write. The sidebar covers every field the CLI supports.
+All action types are configurable through the sidebar: HTTP, Waterfall, Transform, Exec, Lookup, and Write. All source types are also supported: HTTP, Exec, and Webhook — including column mapping, dedup, schedule, and update-existing settings.
 
 > **Note:** The sidebar is a config editor only — it doesn't execute the pipeline. Use `rowbound run` via the CLI to execute. The `exec` action type can be configured in the sidebar but only executes via the CLI (no shell access in Apps Script).
 
