@@ -87,6 +87,20 @@ function getInitData() {
   };
 }
 
+/** Lightweight call to detect tab switches — returns only active tab info. */
+function getActiveTabInfo() {
+  var sheet = SpreadsheetApp.getActiveSheet();
+  var lastCol = sheet.getLastColumn();
+  var headers = lastCol > 0
+    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+    : [];
+  return {
+    tabName: sheet.getName(),
+    tabGid: String(sheet.getSheetId()),
+    headers: headers.filter(function(h) { return h !== ''; }).map(String)
+  };
+}
+
 /** Returns column headers for a given tab. */
 function getTabHeaders(tabName) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tabName);

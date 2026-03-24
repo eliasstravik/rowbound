@@ -367,6 +367,7 @@ body {
     <button class="tab-btn" onclick="switchTab('sources')" data-tab="sources">Sources</button>
     <button class="tab-btn" onclick="switchTab('settings')" data-tab="settings">Settings</button>
   </div>
+  <div id="tab-indicator" style="padding:4px 16px;font-size:11px;color:#888;border-bottom:1px solid #eee;display:none"></div>
   <div id="content">
     <div style="padding: 4px 0;">
       <div class="skeleton skeleton-header"></div>
@@ -2507,6 +2508,7 @@ function applyInitData(data) {
   state.columnInfo = data.columnInfo;
   state.tabs = data.tabs || [];
   ensureConfig();
+  updateTabIndicator();
   switch (data.initialView) {
     case 'overview': showOverview(); break;
     case 'sources': showSources(); break;
@@ -2541,7 +2543,35 @@ document.addEventListener('DOMContentLoaded', function() {
   init();
   // Poll for external config changes (CLI, MCP, etc.) every 10s
   setInterval(pollConfigChanges, 10000);
+  // Poll for tab switches every 2s (lightweight call)
+  setInterval(pollActiveTab, 2000);
 });
+
+/** Update the tab indicator bar to show the active sheet tab name. */
+function updateTabIndicator() {
+  var el = document.getElementById('tab-indicator');
+  if (!el || !state.columnInfo) return;
+  el.textContent = 'Sheet: ' + state.columnInfo.tabName;
+  el.style.display = '';
+}
+
+/** Poll for tab switches — if the user switched to a different sheet tab,
+ *  update columnInfo and re-render. Skips during edit forms. */
+function pollActiveTab() {
+  if (state.editingAction || state.editingSource || state.editingScript) return;
+
+  serverCall('getActiveTabInfo', undefined, function(err, info) {
+    if (err || !info || !state.columnInfo) return;
+    if (info.tabGid === state.columnInfo.tabGid) return;
+
+    // Tab changed — update state and re-render
+    state.columnInfo.tabName = info.tabName;
+    state.columnInfo.tabGid = info.tabGid;
+    state.columnInfo.headers = info.headers;
+    updateTabIndicator();
+    refreshCurrentView();
+  });
+}
 
 /** Re-render the current list view (overview/sources/settings). */
 function refreshCurrentView() {
