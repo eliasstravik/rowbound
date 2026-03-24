@@ -173,14 +173,17 @@ export function registerWatch(program: Command): void {
           return;
         }
 
-        // Check if any actions exist (in v2 tabs or v1 top-level)
+        // Check if any actions or sources exist (in v2 tabs or v1 top-level)
         const hasActions = config.tabs
           ? Object.values(config.tabs).some((t) => t.actions.length > 0)
           : config.actions.length > 0;
-        if (!hasActions) {
+        const hasSources = config.tabs
+          ? Object.values(config.tabs).some((t) => (t.sources ?? []).length > 0)
+          : (config.sources ?? []).length > 0;
+        if (!hasActions && !hasSources) {
           console.error(
             fmtError(
-              "No actions configured. Add actions with 'rowbound config add-action'.",
+              "No actions or sources configured. Add actions with 'rowbound config add-action' or sources with 'rowbound config add-source'.",
             ),
           );
           process.exitCode = 1;
