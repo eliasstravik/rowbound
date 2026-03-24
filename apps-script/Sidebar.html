@@ -920,6 +920,8 @@ function showSourceEditor(source) {
 
 function renderSourceEditorContent() {
   var s = state.editingSource;
+  // Detect AI sources stored as exec (has _ai_runtime tag)
+  if (s.type === 'exec' && s._ai_runtime) { s.type = 'ai'; }
   var h = '';
 
   h += '<div class="section"><div class="section-title">Source</div>';
@@ -983,9 +985,48 @@ function renderSourceEditorContent() {
     h += '</div>';
     h += '</div>';
 
+    var srcMaxTurns = s._ai_maxTurns || '25';
+    var srcToolsFlag = s._ai_tools !== false;
+    h += '<div class="section"><div class="section-title">Settings</div>';
+    h += field('Max Turns', '<input class="field-input" type="number" name="src_ai_maxTurns" value="' + esc(srcMaxTurns) + '" min="1" max="100" placeholder="25">',
+      'Max agent tool-use turns (default: 25)');
+    h += field('Tools', '<select class="field-select" name="src_ai_tools">' +
+      '<option value="true"' + (srcToolsFlag ? ' selected' : '') + '>Enabled \u2014 web search, file read, etc.</option>' +
+      '<option value="false"' + (!srcToolsFlag ? ' selected' : '') + '>Disabled \u2014 text only</option></select>');
+    h += '</div>';
+
     h += '<div class="section"><div class="section-title">Prompt</div>';
     h += field('Prompt', '<textarea class="field-textarea" name="src_ai_prompt" rows="8" placeholder="Generate a list of companies in the SaaS space...">' + esc(s._ai_prompt || '') + '</textarea>',
       'Describe the rows you want generated. The AI will return structured data.');
+    h += '</div>';
+
+    // Output definition (same as actions)
+    var srcOutputFormat = s._ai_outputFormat || 'fields';
+    var srcOutputFields = s._ai_outputFields || [];
+    var srcOutputSchema = s._ai_outputSchema || '';
+
+    h += '<div class="section"><div class="section-title">Define Outputs</div>';
+    h += '<div class="field"><span class="field-label">Output format</span>';
+    h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="src_ai_outputFormat" value="fields"' + (srcOutputFormat === 'fields' ? ' checked' : '') + ' onchange="toggleSrcAiOutput(\'fields\')"> Fields</label>';
+    h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="src_ai_outputFormat" value="json"' + (srcOutputFormat === 'json' ? ' checked' : '') + ' onchange="toggleSrcAiOutput(\'json\')"> JSON Schema</label>';
+    h += '</div>';
+
+    // Fields mode
+    h += '<div id="src-ai-output-fields" style="' + (srcOutputFormat === 'fields' ? '' : 'display:none') + '">';
+    h += '<div id="src-ai-fields-list">';
+    if (srcOutputFields.length === 0) srcOutputFields = [{ name: '', type: 'text' }];
+    for (var sfi = 0; sfi < srcOutputFields.length; sfi++) {
+      h += buildSrcAiOutputFieldRow(sfi, srcOutputFields[sfi]);
+    }
+    h += '</div>';
+    h += '<button class="kv-add" type="button" onclick="addSrcAiOutputField()">+ Add output</button>';
+    h += '</div>';
+
+    // JSON Schema mode
+    h += '<div id="src-ai-output-schema" style="' + (srcOutputFormat === 'json' ? '' : 'display:none') + '">';
+    h += '<textarea class="field-textarea" name="src_ai_outputSchema" rows="10" placeholder=\'{"type":"object","properties":{...}}\'>' + esc(srcOutputSchema) + '</textarea>';
+    h += '<div class="field-hint">JSON Schema defining the output structure</div>';
+    h += '</div>';
     h += '</div>';
 
     h += '<div class="section"><div class="section-title">Response</div>';
@@ -1033,10 +1074,12 @@ function onSourceTypeChange(newType) {
   s.dedup = getVal('src_dedup') || undefined;
   s.updateExisting = getVal('src_updateExisting') === 'true';
   delete s._ai_runtime; delete s._ai_model; delete s._ai_prompt;
+  delete s._ai_maxTurns; delete s._ai_tools;
+  delete s._ai_outputFormat; delete s._ai_outputFields; delete s._ai_outputSchema;
   if (newType === 'http') { s.method = 'POST'; s.url = ''; s.extract = '$'; }
   if (newType === 'exec') { s.command = ''; }
   if (newType === 'script') { s.script = ''; s.args = []; }
-  if (newType === 'ai') { s._ai_runtime = 'claude'; s._ai_prompt = ''; }
+  if (newType === 'ai') { s._ai_runtime = 'claude'; s._ai_prompt = ''; s._ai_outputFormat = 'fields'; }
   renderSourceEditorContent();
 }
 
@@ -1069,13 +1112,67 @@ function readFormSource() {
     var sTimeout = parseInt(getVal('src_timeout'));
     if (sTimeout && sTimeout !== 30000) s.timeout = sTimeout;
   } else if (type === 'ai') {
-    s._ai_runtime = getVal('src_ai_runtime') || 'claude';
-    s._ai_model = getVal('_ai_model') || '';
-    s._ai_prompt = getVal('src_ai_prompt') || '';
+    // AI type is stored as an exec source with an auto-generated command
+    s.type = 'exec';
+    var srcAiRuntime = getVal('src_ai_runtime') || 'claude';
+    var srcAiModel = getVal('_ai_model').trim();
+    var srcAiMaxTurns = getVal('src_ai_maxTurns').trim() || '25';
+    var srcAiTools = getVal('src_ai_tools') === 'true';
+    var srcAiPrompt = getVal('src_ai_prompt').trim();
+
+    // Read output definitions
+    var srcAiOutputFormat = 'fields';
+    var srcRadios = document.querySelectorAll('input[name="src_ai_outputFormat"]');
+    for (var sri = 0; sri < srcRadios.length; sri++) {
+      if (srcRadios[sri].checked) srcAiOutputFormat = srcRadios[sri].value;
+    }
+    var srcAiOutputFields = readSrcAiOutputFields();
+    var srcAiOutputSchema = getVal('src_ai_outputSchema').trim();
+
+    // Build the output instruction to append to the prompt
+    var srcOutputInstruction = '';
+    if (srcAiOutputFormat === 'fields' && srcAiOutputFields.length > 0) {
+      var srcSchemaObj = {};
+      for (var sofi = 0; sofi < srcAiOutputFields.length; sofi++) {
+        var srcTypeMap = { text: 'string', number: 'number', boolean: 'boolean', url: 'string', email: 'string' };
+        srcSchemaObj[srcAiOutputFields[sofi].name] = srcTypeMap[srcAiOutputFields[sofi].type] || 'string';
+      }
+      srcOutputInstruction = '\n\nYour response must be ONLY a raw JSON array \u2014 no preamble, no commentary, no markdown fences. The very first character must be [ and the very last must be ]. Each element must be an object with this schema: ' + JSON.stringify(srcSchemaObj);
+    } else if (srcAiOutputFormat === 'json' && srcAiOutputSchema) {
+      srcOutputInstruction = '\n\nYour response must be ONLY a raw JSON array \u2014 no preamble, no commentary, no markdown fences. The very first character must be [ and the very last must be ]. Each element must conform to this JSON Schema: ' + srcAiOutputSchema;
+    }
+
+    var srcFullPrompt = srcAiPrompt + srcOutputInstruction;
+
+    // Build the exec command
+    var srcCmd;
+    if (srcAiRuntime === 'claude') {
+      srcCmd = 'claude -p';
+      if (srcAiModel) srcCmd += ' --model ' + srcAiModel;
+      if (srcAiMaxTurns && srcAiMaxTurns !== '0') srcCmd += ' --max-turns ' + srcAiMaxTurns;
+      if (srcAiTools) srcCmd += ' --tools default';
+      srcCmd += " --no-session-persistence '" + srcFullPrompt.replace(/'/g, "'\\''") + "' < /dev/null";
+    } else {
+      srcCmd = 'codex exec';
+      if (srcAiModel) srcCmd += ' --model ' + srcAiModel;
+      srcCmd += " -s read-only '" + srcFullPrompt.replace(/'/g, "'\\''") + "'";
+    }
+    s.command = srcCmd;
+
+    // Tag it so the sidebar can detect it's an AI source when re-editing
+    s._ai_runtime = srcAiRuntime;
+    s._ai_model = srcAiModel;
+    s._ai_maxTurns = srcAiMaxTurns;
+    s._ai_prompt = srcAiPrompt;
+    s._ai_tools = srcAiTools;
+    s._ai_outputFormat = srcAiOutputFormat;
+    s._ai_outputFields = srcAiOutputFields;
+    s._ai_outputSchema = srcAiOutputSchema;
+
     var aiExt = getVal('src_extract').trim();
     if (aiExt) s.extract = aiExt;
     var aiTimeout = parseInt(getVal('src_timeout'));
-    if (aiTimeout && aiTimeout !== 300000) s.timeout = aiTimeout;
+    if (aiTimeout) s.timeout = aiTimeout;
   }
 
   s.columns = readKvList('src_columns');
@@ -1690,6 +1787,55 @@ function readAiOutputFields() {
     if (!name) continue;
     var idx = names[i].getAttribute('data-ai-field-name');
     var typeEl = document.querySelector('[data-ai-field-type="' + idx + '"]');
+    fields.push({ name: name, type: typeEl ? typeEl.value : 'text' });
+  }
+  return fields;
+}
+
+// ── Source AI output helpers (prefixed with src- to avoid collisions) ──────
+
+function toggleSrcAiOutput(mode) {
+  document.getElementById('src-ai-output-fields').style.display = mode === 'fields' ? '' : 'none';
+  document.getElementById('src-ai-output-schema').style.display = mode === 'json' ? '' : 'none';
+}
+
+function buildSrcAiOutputFieldRow(idx, f) {
+  var h = '<div class="kv-row" data-src-ai-field="' + idx + '">';
+  h += '<input class="field-input" data-src-ai-field-name="' + idx + '" value="' + esc(f.name || '') + '" placeholder="Field name" style="flex:2">';
+  h += '<select class="field-select" data-src-ai-field-type="' + idx + '" style="flex:1;min-width:80px">';
+  var types = ['text', 'number', 'checkbox'];
+  for (var i = 0; i < types.length; i++) {
+    h += '<option value="' + types[i] + '"' + (types[i] === (f.type || 'text') ? ' selected' : '') + '>' +
+      types[i].charAt(0).toUpperCase() + types[i].slice(1) + '</option>';
+  }
+  h += '</select>';
+  h += '<button class="kv-remove" type="button" onclick="removeSrcAiOutputField(' + idx + ')" title="Remove">&times;</button>';
+  h += '</div>';
+  return h;
+}
+
+function addSrcAiOutputField() {
+  var list = document.getElementById('src-ai-fields-list');
+  var rows = list.querySelectorAll('[data-src-ai-field]');
+  var idx = rows.length;
+  var tmp = document.createElement('div');
+  safeSetHTML(tmp, buildSrcAiOutputFieldRow(idx, { name: '', type: 'text' }));
+  list.appendChild(tmp.firstChild);
+}
+
+function removeSrcAiOutputField(idx) {
+  var row = document.querySelector('[data-src-ai-field="' + idx + '"]');
+  if (row) row.remove();
+}
+
+function readSrcAiOutputFields() {
+  var fields = [];
+  var names = document.querySelectorAll('[data-src-ai-field-name]');
+  for (var i = 0; i < names.length; i++) {
+    var name = names[i].value.trim();
+    if (!name) continue;
+    var idx = names[i].getAttribute('data-src-ai-field-name');
+    var typeEl = document.querySelector('[data-src-ai-field-type="' + idx + '"]');
     fields.push({ name: name, type: typeEl ? typeEl.value : 'text' });
   }
   return fields;
