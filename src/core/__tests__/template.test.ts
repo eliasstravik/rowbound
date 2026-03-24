@@ -47,9 +47,9 @@ describe("resolveTemplate", () => {
   });
 
   it("resolves mixed shorthand and prefixed placeholders", () => {
-    expect(
-      resolveTemplate("{{name}} key={{env.API_KEY}}", context),
-    ).toBe("Alice key=sk-123");
+    expect(resolveTemplate("{{name}} key={{env.API_KEY}}", context)).toBe(
+      "Alice key=sk-123",
+    );
   });
 
   it("returns empty string for missing shorthand variables", () => {
@@ -110,9 +110,9 @@ describe("resolveTemplateEscaped", () => {
   });
 
   it("applies escape function to shorthand variables", () => {
-    expect(
-      resolveTemplateEscaped("echo {{name}}", context, mockEscape),
-    ).toBe("echo [Alice]");
+    expect(resolveTemplateEscaped("echo {{name}}", context, mockEscape)).toBe(
+      "echo [Alice]",
+    );
   });
 });
 
