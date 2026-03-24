@@ -1,9 +1,9 @@
 import type { Command } from "commander";
 import { SheetsAdapter } from "../adapters/sheets/sheets-adapter.js";
 import { getTabConfig, resolveTabGid } from "../core/tab-resolver.js";
-import type { Action, ScriptDef } from "../core/types.js";
+import type { Action, ScriptDef, Source } from "../core/types.js";
 import { type ValidationResult, validateConfig } from "../core/validator.js";
-import { error, warn } from "./format.js";
+import { bold, dim, error, warn } from "./format.js";
 
 export function registerConfig(program: Command): void {
   const configCmd = program
@@ -423,6 +423,360 @@ export function registerConfig(program: Command): void {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(error("Failed to remove script:"), msg);
+        process.exitCode = 1;
+      }
+    });
+
+  // rowbound config add-source <sheetId> --json '<source JSON>' [--tab <name>]
+  configCmd
+    .command("add-source")
+    .description("Add a source to the pipeline config")
+    .argument("<sheetId>", "Google Sheets spreadsheet ID")
+    .requiredOption("--json <sourceJson>", "Source definition as JSON string")
+    .option("--tab <name>", "Sheet tab name")
+    .action(async (sheetId: string, opts: { tab?: string; json: string }) => {
+      const adapter = new SheetsAdapter();
+      const ref = { spreadsheetId: sheetId, sheetName: opts.tab || "Sheet1" };
+
+      try {
+        let source: Source;
+        try {
+          source = JSON.parse(opts.json) as Source;
+        } catch {
+          console.error(error("Invalid JSON for source definition."));
+          process.exitCode = 1;
+          return;
+        }
+
+        if (!source.id || !source.type) {
+          console.error(
+            error("Source must have at least 'id' and 'type' fields."),
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const existing = await adapter.readConfig(ref);
+        if (!existing) {
+          console.error(
+            error(
+              "No Rowbound config found. Run 'rowbound init <sheetId>' first.",
+            ),
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        if (existing.tabs) {
+          const { gid, tab } = getTabConfig(existing, opts.tab);
+          if (!tab.sources) tab.sources = [];
+          if (tab.sources.some((s) => s.id === source.id)) {
+            console.error(
+              error(`Source with id "${source.id}" already exists.`),
+            );
+            process.exitCode = 1;
+            return;
+          }
+          tab.sources.push(source);
+          existing.tabs[gid] = tab;
+        } else {
+          if (!existing.sources) existing.sources = [];
+          if (existing.sources.some((s) => s.id === source.id)) {
+            console.error(
+              error(`Source with id "${source.id}" already exists.`),
+            );
+            process.exitCode = 1;
+            return;
+          }
+          existing.sources.push(source);
+        }
+
+        await adapter.writeConfig(ref, existing);
+        console.log(`Added source "${source.id}" (${source.type})`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(error("Failed to add source:"), msg);
+        process.exitCode = 1;
+      }
+    });
+
+  // rowbound config remove-source <sheetId> --source <id> [--tab <name>]
+  configCmd
+    .command("remove-source")
+    .description("Remove a source from the pipeline config")
+    .argument("<sheetId>", "Google Sheets spreadsheet ID")
+    .requiredOption("--source <id>", "Source ID to remove")
+    .option("--tab <name>", "Sheet tab name")
+    .action(async (sheetId: string, opts: { tab?: string; source: string }) => {
+      const adapter = new SheetsAdapter();
+      const ref = { spreadsheetId: sheetId, sheetName: opts.tab || "Sheet1" };
+
+      try {
+        const existing = await adapter.readConfig(ref);
+        if (!existing) {
+          console.error(
+            error(
+              "No Rowbound config found. Run 'rowbound init <sheetId>' first.",
+            ),
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        if (existing.tabs) {
+          const { gid, tab } = getTabConfig(existing, opts.tab);
+          const sources = tab.sources ?? [];
+          const originalLength = sources.length;
+          tab.sources = sources.filter((s) => s.id !== opts.source);
+          if (tab.sources.length === originalLength) {
+            console.error(
+              error(`Source "${opts.source}" not found in config.`),
+            );
+            process.exitCode = 1;
+            return;
+          }
+          existing.tabs[gid] = tab;
+        } else {
+          const sources = existing.sources ?? [];
+          const originalLength = sources.length;
+          existing.sources = sources.filter((s) => s.id !== opts.source);
+          if (existing.sources.length === originalLength) {
+            console.error(
+              error(`Source "${opts.source}" not found in config.`),
+            );
+            process.exitCode = 1;
+            return;
+          }
+        }
+
+        await adapter.writeConfig(ref, existing);
+        console.log(`Removed source "${opts.source}".`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(error("Failed to remove source:"), msg);
+        process.exitCode = 1;
+      }
+    });
+
+  // rowbound config update-source <sheetId> --source <id> --json '<partial JSON>' [--tab <name>]
+  configCmd
+    .command("update-source")
+    .description("Update a source in the pipeline config (merge partial JSON)")
+    .argument("<sheetId>", "Google Sheets spreadsheet ID")
+    .requiredOption("--source <id>", "Source ID to update")
+    .requiredOption(
+      "--json <partialJson>",
+      "Partial source definition to merge",
+    )
+    .option("--tab <name>", "Sheet tab name")
+    .action(
+      async (
+        sheetId: string,
+        opts: { tab?: string; source: string; json: string },
+      ) => {
+        const adapter = new SheetsAdapter();
+        const ref = { spreadsheetId: sheetId, sheetName: opts.tab || "Sheet1" };
+
+        try {
+          let patch: Partial<Source>;
+          try {
+            patch = JSON.parse(opts.json) as Partial<Source>;
+          } catch {
+            console.error(error("Invalid JSON for source update."));
+            process.exitCode = 1;
+            return;
+          }
+
+          const existing = await adapter.readConfig(ref);
+          if (!existing) {
+            console.error(
+              error(
+                "No Rowbound config found. Run 'rowbound init <sheetId>' first.",
+              ),
+            );
+            process.exitCode = 1;
+            return;
+          }
+
+          let sources: Source[];
+          let gid: string | undefined;
+          if (existing.tabs) {
+            const resolved = getTabConfig(existing, opts.tab);
+            gid = resolved.gid;
+            sources = resolved.tab.sources ?? [];
+          } else {
+            sources = existing.sources ?? [];
+          }
+
+          const sourceIndex = sources.findIndex((s) => s.id === opts.source);
+          if (sourceIndex === -1) {
+            console.error(
+              error(`Source "${opts.source}" not found in config.`),
+            );
+            process.exitCode = 1;
+            return;
+          }
+
+          // If renaming the ID, check for duplicates
+          if (patch.id && patch.id !== opts.source) {
+            if (sources.some((s) => s.id === patch.id)) {
+              console.error(
+                error(`Source with id "${patch.id}" already exists.`),
+              );
+              process.exitCode = 1;
+              return;
+            }
+          }
+
+          sources[sourceIndex] = {
+            ...sources[sourceIndex]!,
+            ...patch,
+          } as Source;
+
+          if (existing.tabs && gid) {
+            existing.tabs[gid]!.sources = sources;
+          } else {
+            existing.sources = sources;
+          }
+
+          await adapter.writeConfig(ref, existing);
+          console.log(
+            `Updated source "${opts.source}"${patch.id && patch.id !== opts.source ? ` → "${patch.id}"` : ""}`,
+          );
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(error("Failed to update source:"), msg);
+          process.exitCode = 1;
+        }
+      },
+    );
+
+  // rowbound config update-script <sheetId> --name <name> --json '<partial JSON>' [--tab <name>]
+  configCmd
+    .command("update-script")
+    .description("Update a script in the pipeline config (merge partial JSON)")
+    .argument("<sheetId>", "Google Sheets spreadsheet ID")
+    .requiredOption("--name <name>", "Script name to update")
+    .requiredOption(
+      "--json <partialJson>",
+      "Partial script definition to merge",
+    )
+    .option("--tab <name>", "Sheet tab name")
+    .action(
+      async (
+        sheetId: string,
+        opts: { tab?: string; name: string; json: string },
+      ) => {
+        const adapter = new SheetsAdapter();
+        const ref = { spreadsheetId: sheetId, sheetName: opts.tab || "Sheet1" };
+
+        try {
+          let patch: Partial<ScriptDef>;
+          try {
+            patch = JSON.parse(opts.json) as Partial<ScriptDef>;
+          } catch {
+            console.error(error("Invalid JSON for script update."));
+            process.exitCode = 1;
+            return;
+          }
+
+          const existing = await adapter.readConfig(ref);
+          if (!existing) {
+            console.error(
+              error(
+                "No Rowbound config found. Run 'rowbound init <sheetId>' first.",
+              ),
+            );
+            process.exitCode = 1;
+            return;
+          }
+
+          if (existing.tabs) {
+            const { gid, tab } = getTabConfig(existing, opts.tab);
+            if (!tab.scripts || !tab.scripts[opts.name]) {
+              console.error(
+                error(`Script "${opts.name}" not found in config.`),
+              );
+              process.exitCode = 1;
+              return;
+            }
+            tab.scripts[opts.name] = {
+              ...tab.scripts[opts.name],
+              ...patch,
+            } as ScriptDef;
+            existing.tabs[gid] = tab;
+          } else {
+            if (!existing.scripts || !existing.scripts[opts.name]) {
+              console.error(
+                error(`Script "${opts.name}" not found in config.`),
+              );
+              process.exitCode = 1;
+              return;
+            }
+            existing.scripts[opts.name] = {
+              ...existing.scripts[opts.name],
+              ...patch,
+            } as ScriptDef;
+          }
+
+          await adapter.writeConfig(ref, existing);
+          console.log(`Updated script "${opts.name}".`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error(error("Failed to update script:"), msg);
+          process.exitCode = 1;
+        }
+      },
+    );
+
+  // rowbound config list-actions <sheetId> [--tab <name>] [--json]
+  configCmd
+    .command("list-actions")
+    .description("List configured actions")
+    .argument("<sheetId>", "Google Sheets spreadsheet ID")
+    .option("--tab <name>", "Sheet tab name")
+    .option("--json", "Output as JSON")
+    .action(async (sheetId: string, opts: { tab?: string; json?: boolean }) => {
+      const adapter = new SheetsAdapter();
+      const ref = { spreadsheetId: sheetId, sheetName: opts.tab || "Sheet1" };
+
+      try {
+        const existing = await adapter.readConfig(ref);
+        if (!existing) {
+          console.error(error("No Rowbound config found."));
+          process.exitCode = 1;
+          return;
+        }
+
+        let actions: Action[];
+        if (existing.tabs) {
+          const { tab } = getTabConfig(existing, opts.tab);
+          actions = tab.actions;
+        } else {
+          actions = existing.actions;
+        }
+
+        if (opts.json) {
+          console.log(JSON.stringify(actions, null, 2));
+          return;
+        }
+
+        if (actions.length === 0) {
+          console.log(dim("No actions configured."));
+          return;
+        }
+
+        console.log(`${bold("Actions")} (${actions.length})\n`);
+        for (const a of actions) {
+          const target =
+            "target" in a ? (a as Action & { target: string }).target : "";
+          console.log(
+            `  ${bold(a.id)} (${a.type})${target ? ` → ${target}` : ""}`,
+          );
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(error("Failed to list actions:"), msg);
         process.exitCode = 1;
       }
     });
