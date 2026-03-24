@@ -119,9 +119,14 @@ Column names are automatically resolved to stable IDs when you run `rowbound syn
 | `rowbound config add-action <sheetId>` | Add an action to the pipeline |
 | `rowbound config remove-action <sheetId>` | Remove an action by ID |
 | `rowbound config update-action <sheetId>` | Update an action (merge partial JSON) |
+| `rowbound config list-actions <sheetId>` | List configured actions (`--json`) |
+| `rowbound config add-source <sheetId>` | Add a source to the pipeline |
+| `rowbound config remove-source <sheetId>` | Remove a source by ID |
+| `rowbound config update-source <sheetId>` | Update a source (merge partial JSON) |
 | `rowbound config set <sheetId>` | Update pipeline settings (`--enabled`, `--disabled`, `--concurrency`, `--rate-limit`, etc.) |
 | `rowbound config add-script <sheetId>` | Add a script to the pipeline config |
 | `rowbound config remove-script <sheetId>` | Remove a script by name |
+| `rowbound config update-script <sheetId>` | Update a script (merge partial JSON) |
 | `rowbound config validate <sheetId>` | Validate the pipeline config |
 | `rowbound runs [runId]` | List recent runs or view a specific run |
 | `rowbound runs clear` | Delete all run history |
@@ -304,6 +309,7 @@ Use `"type": "script"` in a source to run a named script and create rows from it
 |---------|-------------|
 | `rowbound config add-script <sheetId>` | Add a script to the config |
 | `rowbound config remove-script <sheetId>` | Remove a script by name |
+| `rowbound config update-script <sheetId>` | Update a script (merge partial JSON) |
 
 ## Action Types
 
