@@ -367,7 +367,6 @@ body {
     <button class="tab-btn" onclick="switchTab('sources')" data-tab="sources">Sources</button>
     <button class="tab-btn" onclick="switchTab('settings')" data-tab="settings">Settings</button>
   </div>
-  <div id="tab-indicator" style="padding:4px 16px;font-size:11px;color:#888;border-bottom:1px solid #eee;display:none"></div>
   <div id="content">
     <div style="padding: 4px 0;">
       <div class="skeleton skeleton-header"></div>
@@ -2508,7 +2507,6 @@ function applyInitData(data) {
   state.columnInfo = data.columnInfo;
   state.tabs = data.tabs || [];
   ensureConfig();
-  updateTabIndicator();
   switch (data.initialView) {
     case 'overview': showOverview(); break;
     case 'sources': showSources(); break;
@@ -2543,20 +2541,30 @@ document.addEventListener('DOMContentLoaded', function() {
   init();
   // Poll for external config changes (CLI, MCP, etc.) every 10s
   setInterval(pollConfigChanges, 10000);
-  // Poll for tab switches every 2s (lightweight call)
-  setInterval(pollActiveTab, 2000);
+  // Poll for tab switches every 1s (lightweight call)
+  setInterval(pollActiveTab, 1000);
 });
 
-/** Update the tab indicator bar to show the active sheet tab name. */
-function updateTabIndicator() {
-  var el = document.getElementById('tab-indicator');
-  if (!el || !state.columnInfo) return;
-  el.textContent = 'Sheet: ' + state.columnInfo.tabName;
-  el.style.display = '';
+/** Show a skeleton loading state with the new tab name so the user
+ *  sees instant feedback while we fetch the tab's config. */
+function showTabSwitchSkeleton(tabName) {
+  var content = document.getElementById('content');
+  var h = '<div class="toggle-row">';
+  h += '<div><div class="toggle-label">' + esc(tabName) + '</div>';
+  h += '<div class="toggle-sub">Loading\u2026</div></div></div>';
+  h += '<div style="padding: 4px 0;">';
+  h += '<div class="skeleton skeleton-card"></div>';
+  h += '<div class="skeleton skeleton-card"></div>';
+  h += '<div class="skeleton skeleton-card"></div>';
+  h += '</div>';
+  safeSetHTML(content, h);
+  // Clear footer during loading
+  safeSetHTML(document.getElementById('footer'), '');
 }
 
 /** Poll for tab switches — if the user switched to a different sheet tab,
- *  update columnInfo and re-render. Skips during edit forms. */
+ *  instantly show a skeleton, update state, then re-render with real data.
+ *  Skips during edit forms. */
 function pollActiveTab() {
   if (state.editingAction || state.editingSource || state.editingScript) return;
 
@@ -2564,12 +2572,26 @@ function pollActiveTab() {
     if (err || !info || !state.columnInfo) return;
     if (info.tabGid === state.columnInfo.tabGid) return;
 
-    // Tab changed — update state and re-render
+    // Tab changed — show skeleton immediately
+    showTabSwitchSkeleton(info.tabName);
+
+    // Update state
     state.columnInfo.tabName = info.tabName;
     state.columnInfo.tabGid = info.tabGid;
     state.columnInfo.headers = info.headers;
-    updateTabIndicator();
-    refreshCurrentView();
+
+    // Fetch fresh config then re-render
+    serverCall('loadConfigFresh', undefined, function(cfgErr, freshConfig) {
+      if (!cfgErr && freshConfig) {
+        state.config = freshConfig;
+        try { sessionStorage.setItem('rb_initData', JSON.stringify({
+          config: freshConfig, columnInfo: state.columnInfo,
+          tabs: state.tabs, initialView: state.view
+        })); } catch (e) {}
+      }
+      ensureConfig();
+      refreshCurrentView();
+    });
   });
 }
 
