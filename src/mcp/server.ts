@@ -120,7 +120,7 @@ const actionConfigSchema = z
       .describe("JSONPath or expression to extract from response"),
     expression: z.string().optional().describe("Transform expression"),
     command: z.string().optional().describe("Shell command to execute"),
-    timeout: z.number().optional().describe("Timeout in milliseconds"),
+    timeout: z.number().optional().describe("Timeout in seconds"),
     providers: z.array(z.any()).optional().describe("Waterfall providers list"),
     onError: z
       .record(z.string(), z.any())
@@ -250,7 +250,7 @@ const actionPatchSchema = z
       .describe("JSONPath or expression to extract from response"),
     expression: z.string().optional().describe("Transform expression"),
     command: z.string().optional().describe("Shell command to execute"),
-    timeout: z.number().optional().describe("Timeout in milliseconds"),
+    timeout: z.number().optional().describe("Timeout in seconds"),
     providers: z.array(z.any()).optional().describe("Waterfall providers list"),
     onError: z
       .record(z.string(), z.any())
@@ -1349,7 +1349,7 @@ const sourceConfigSchema = z
       .optional()
       .describe("JSONPath to drill into nested object"),
     command: z.string().optional().describe("Shell command for exec sources"),
-    timeout: z.number().optional().describe("Timeout in milliseconds"),
+    timeout: z.number().optional().describe("Timeout in seconds"),
     columns: z
       .record(z.string(), z.string())
       .describe("Column mappings: { Header: JSONPath }"),

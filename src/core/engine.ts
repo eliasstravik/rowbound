@@ -408,7 +408,7 @@ export async function runPipeline(
           const actionEnv = action.env ? { ...env, ...action.env } : env;
           value = await executeScriptAction(scriptDef, resolvedArgs, {
             env: actionEnv,
-            timeout: sa.timeout,
+            timeout: sa.timeout ? sa.timeout * 1000 : undefined,
             signal,
             extract: sa.extract,
             onError: sa.onError,

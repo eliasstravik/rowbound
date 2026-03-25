@@ -160,7 +160,7 @@ export async function executeExecAction(
   let result: ExecResult;
   try {
     result = await executeCommand(resolvedCommand, {
-      timeout: action.timeout,
+      timeout: action.timeout ? action.timeout * 1000 : undefined,
       signal: options.signal,
       env: context.env,
     });

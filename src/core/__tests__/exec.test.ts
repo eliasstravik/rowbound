@@ -228,7 +228,7 @@ describe("executeExecAction", () => {
         type: "exec",
         target: "result",
         command: "sleep 10",
-        timeout: 100,
+        timeout: 0.1,
         onError: { default: { write: "timed out" } },
       };
       const context: ExecutionContext = { row: {}, env: {} };

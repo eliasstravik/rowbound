@@ -10,7 +10,7 @@ import type {
   OnErrorConfig,
 } from "./types.js";
 
-const DEFAULT_AI_TIMEOUT = 120_000; // 2 minutes
+const DEFAULT_AI_TIMEOUT_SECONDS = 120; // 2 minutes
 
 /**
  * Sanitize row data before interpolating into AI prompts.
@@ -96,7 +96,8 @@ export async function executeAiAction(
   },
 ): Promise<CellUpdate[]> {
   const prompt = buildPrompt(action, context);
-  const timeout = action.timeout ?? DEFAULT_AI_TIMEOUT;
+  const timeoutSeconds = action.timeout ?? DEFAULT_AI_TIMEOUT_SECONDS;
+  const timeout = timeoutSeconds * 1000;
 
   // Write prompt to a temp file to avoid shell injection via prompt content
   const tmpFile = join(
@@ -254,7 +255,9 @@ export async function executeAiAction(
     if (error instanceof Error && error.message.includes("timed out")) {
       const errorAction = resolveAiErrorAction(action.onError, 1);
       if (errorAction === "skip") return [];
-      throw new Error(`AI action "${action.id}" timed out after ${timeout}ms`);
+      throw new Error(
+        `AI action "${action.id}" timed out after ${timeoutSeconds}s`,
+      );
     }
 
     throw error;

@@ -159,7 +159,7 @@ export async function executeSource(
     const resolvedCommand = resolveTemplate(execSource.command, context);
 
     const execResult = await executeCommand(resolvedCommand, {
-      timeout: execSource.timeout ?? 30_000,
+      timeout: (execSource.timeout ?? 30) * 1000,
       signal,
       env: { ...process.env, ...env } as Record<string, string>,
     });
@@ -193,7 +193,7 @@ export async function executeSource(
     );
     const scriptResult = await executeScriptFn(scriptDef, resolvedArgs, {
       env: { ...process.env, ...env } as Record<string, string>,
-      timeout: scriptSource.timeout ?? 30_000,
+      timeout: (scriptSource.timeout ?? 30) * 1000,
       signal,
     });
     if (scriptResult.exitCode !== 0) {

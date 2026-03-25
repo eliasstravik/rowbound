@@ -288,7 +288,7 @@ export interface AiAction {
   outputFormat?: "fields" | "json";
   /** JSON Schema string (used when outputFormat is "json") */
   outputSchema?: string;
-  /** Timeout in ms (default: 120000 = 2 minutes) */
+  /** Timeout in seconds (default: 120 = 2 minutes) */
   timeout?: number;
   onError?: OnErrorConfig;
   runSettings?: ActionRunSettings;

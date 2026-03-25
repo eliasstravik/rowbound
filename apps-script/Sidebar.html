@@ -959,7 +959,7 @@ function renderSourceEditorContent() {
     h += field('Shell Command', '<textarea class="field-textarea" name="src_command" placeholder="curl https://...">' + esc(s.command || '') + '</textarea>');
     h += field('Extract (JSONPath)', '<input class="field-input" name="src_extract" value="' + esc(s.extract || '') + '" placeholder="$.results">',
       'Optional \u2014 extract array from JSON output');
-    h += field('Timeout (ms)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 30000) + '">');
+    h += field('Timeout (seconds)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 30) + '">');
     h += '</div>';
   } else if (s.type === 'script') {
     // Look up the inline code from the named script definition
@@ -980,7 +980,7 @@ function renderSourceEditorContent() {
     h += '<div class="section"><div class="section-title">Response</div>';
     h += field('Extract (JSONPath)', '<input class="field-input" name="src_extract" value="' + esc(s.extract || '') + '" placeholder="$.results">',
       'Optional \u2014 extract array from JSON output');
-    h += field('Timeout (ms)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 30000) + '">');
+    h += field('Timeout (seconds)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 30) + '">');
     h += '</div>';
   } else if (s.type === 'ai') {
     h += '<div class="section"><div class="section-title">Provider &amp; Model</div>';
@@ -1041,7 +1041,7 @@ function renderSourceEditorContent() {
     h += '<div class="section"><div class="section-title">Response</div>';
     h += field('Extract (JSONPath)', '<input class="field-input" name="src_extract" value="' + esc(s.extract || '') + '" placeholder="$.results">',
       'Optional \u2014 extract array from JSON output');
-    h += field('Timeout (ms)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 300000) + '">');
+    h += field('Timeout (seconds)', '<input class="field-input" type="number" name="src_timeout" value="' + esc(s.timeout || 300) + '">');
     h += '</div>';
   }
   // webhook has no request fields
@@ -1111,7 +1111,7 @@ function readFormSource() {
     var ext = getVal('src_extract').trim();
     if (ext) s.extract = ext;
     var timeout = parseInt(getVal('src_timeout'));
-    if (timeout && timeout !== 30000) s.timeout = timeout;
+    if (timeout && timeout !== 30) s.timeout = timeout;
   } else if (type === 'script') {
     // Save the code as a named script (using source ID as the script name)
     var srcRuntime = getVal('src_script_runtime') || 'python3';
@@ -1551,7 +1551,7 @@ function buildExecFields(a) {
     esc(a.command || '') + '</textarea>',
     'Template values are shell-escaped. Note: exec only works via CLI, not in Google Sheets.');
   h += field('Extract (JSONPath)', '<input class="field-input" name="extract" value="' + esc(a.extract || '') + '" placeholder="Optional \u2014 extract from JSON output">');
-  h += field('Timeout (ms)', '<input class="field-input" type="number" name="timeout" value="' + esc(a.timeout || 10000) + '">');
+  h += field('Timeout (seconds)', '<input class="field-input" type="number" name="timeout" value="' + esc(a.timeout || 10) + '">');
   h += '</div>';
 
   h += '<div class="section"><div class="section-title">Error Handling</div>';
@@ -1634,7 +1634,7 @@ function buildScriptFields(a) {
   h += '<div class="section"><div class="section-title">Response</div>';
   h += field('Extract (JSONPath)', '<input class="field-input" name="extract" value="' + esc(a.extract || '') + '" placeholder="$.result">',
     'Optional \u2014 extract from JSON output');
-  h += field('Timeout (ms)', '<input class="field-input" type="number" name="timeout" value="' + esc(a.timeout || 30000) + '">');
+  h += field('Timeout (seconds)', '<input class="field-input" type="number" name="timeout" value="' + esc(a.timeout || 30) + '">');
   h += '</div>';
 
   return h;
@@ -1716,8 +1716,8 @@ function buildAiFields(a) {
   h += '</div>';
 
   h += '<div class="section"><div class="section-title">Response</div>';
-  h += field('Timeout (ms)', '<input class="field-input" type="number" name="timeout" value="' + esc(a.timeout || 300000) + '">',
-    'AI actions may take longer \u2014 default 5 minutes');
+  h += field('Timeout (seconds)', '<input class="field-input" type="number" name="timeout" value="' + esc(a.timeout || 300) + '">',
+    'AI actions may take longer — default 300 seconds');
   h += '</div>';
 
   h += '<div class="section"><div class="section-title">Error Handling</div>';
@@ -2060,7 +2060,7 @@ function readFormAction() {
       var ext = getVal('extract').trim();
       if (ext) a.extract = ext;
       var timeout = parseInt(getVal('timeout'));
-      if (timeout && timeout !== 10000) a.timeout = timeout;
+      if (timeout && timeout !== 10) a.timeout = timeout;
       var execErr = parseOnError(readKvList('onError'));
       if (execErr) a.onError = execErr;
       break;
@@ -2112,7 +2112,7 @@ function readFormAction() {
       var ext = getVal('extract').trim();
       if (ext) a.extract = ext;
       var timeout = parseInt(getVal('timeout'));
-      if (timeout && timeout !== 30000) a.timeout = timeout;
+      if (timeout && timeout !== 30) a.timeout = timeout;
       break;
 
     case 'ai':

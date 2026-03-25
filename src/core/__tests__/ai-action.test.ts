@@ -193,8 +193,8 @@ describe("executeAiAction", () => {
     expect(updates).toEqual([]);
   });
 
-  it("uses custom timeout", async () => {
-    const action: AiAction = { ...baseAction, timeout: 60_000 };
+  it("uses custom timeout in seconds", async () => {
+    const action: AiAction = { ...baseAction, timeout: 60 };
     mockExecuteCommand.mockResolvedValue({
       stdout: "result",
       stderr: "",
