@@ -77,26 +77,35 @@ export interface RunResult {
  * stringified — used for transform action expressions.
  */
 /**
- * Pre-process a transform expression to expand {{Column Name}} references
- * into row["Column Name"] access. This allows users to write simple
- * Clay-style expressions like:
+ * Pre-process a transform expression to expand {{ref}} references
+ * into row["Column Name"] access. Supports both:
+ *   - Column names: {{Email}}, {{First Name}}
+ *   - Column IDs: {{497d7283}} (resolved via columnMap to current name)
+ *
+ * This allows users to write simple Clay-style expressions like:
  *   {{Email}}.split("@")[1]
  *   {{First Name}} + " " + {{Last Name}}
  *   JSON.parse({{data}}).field
  */
-function expandColumnRefs(expression: string): string {
-  return expression.replace(
-    /\{\{([^}]+)\}\}/g,
-    (_match, columnName: string) => `row[${JSON.stringify(columnName.trim())}]`,
-  );
+function expandColumnRefs(
+  expression: string,
+  columnMap?: Record<string, string>,
+): string {
+  return expression.replace(/\{\{([^}]+)\}\}/g, (_match, ref: string) => {
+    const trimmed = ref.trim();
+    // If ref is a column ID in the columnMap, resolve to column name
+    const resolvedName = columnMap?.[trimmed] ?? trimmed;
+    return `row[${JSON.stringify(resolvedName)}]`;
+  });
 }
 
 export function evaluateExpression(
   expression: string,
   context: ExecutionContext,
+  columnMap?: Record<string, string>,
 ): string {
-  // Expand {{Column}} references to row["Column"] before eval
-  const expanded = expandColumnRefs(expression);
+  // Expand {{Column}} or {{colId}} references to row["Column"] before eval
+  const expanded = expandColumnRefs(expression, columnMap);
 
   preCheckExpression(expanded);
 
@@ -377,7 +386,11 @@ export async function runPipeline(
         let value: string | null = null;
 
         if (action.type === "transform") {
-          value = evaluateExpression(action.expression, actionContext);
+          value = evaluateExpression(
+            action.expression,
+            actionContext,
+            options.columnMap,
+          );
         } else if (action.type === "http") {
           value = await executeHttpAction(
             action,

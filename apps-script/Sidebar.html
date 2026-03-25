@@ -140,6 +140,61 @@ body {
   outline: none;
   line-height: 1.5;
 }
+.pill-editor {
+  width: 100%;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', 'Roboto Mono', Consolas, monospace;
+  font-size: 12px;
+  min-height: 56px;
+  outline: none;
+  line-height: 2;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: text;
+}
+.pill-editor:focus { border-color: #1a73e8; box-shadow: 0 0 0 1px #1a73e8; }
+.pill-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #999;
+  pointer-events: none;
+}
+.pill {
+  display: inline-block;
+  background: #e8f0fe;
+  color: #1a73e8;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin: 0 1px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.6;
+  white-space: nowrap;
+  cursor: default;
+  user-select: all;
+}
+.pill-dropdown {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  min-width: 180px;
+}
+.pill-dropdown-item {
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+.pill-dropdown-item:last-child { border-bottom: none; }
+.pill-dropdown-item:hover, .pill-dropdown-item.active { background: #e8f0fe; }
+.pill-dropdown-empty { padding: 8px 12px; font-size: 12px; color: #999; }
 .field-row {
   display: flex;
   gap: 8px;
@@ -1378,6 +1433,7 @@ function renderEditorContent() {
   h += '</div>';
 
   safeSetHTML(document.getElementById('content'), h);
+  setTimeout(initPillEditors, 0);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1536,11 +1592,15 @@ function buildProviderCard(p, idx) {
 
 function buildTransformFields(a) {
   var h = '<div class="section"><div class="section-title">Formula</div>';
-  h += field('Expression',
-    '<textarea class="field-textarea" name="expression" rows="3" placeholder="{{Email}}.split(&quot;@&quot;)[1]">' +
-    esc(a.expression || '') + '</textarea>',
-    'JavaScript expression. Use {{Column Name}} to reference columns.');
+  h += '<div class="field"><span class="field-label">Expression</span>';
+  h += '<div style="position:relative">';
+  h += '<div class="pill-editor" contenteditable="true" data-name="expression" data-placeholder="Type {{ to insert a column reference">';
+  h += expressionToHtml(a.expression || '');
   h += '</div>';
+  h += '<div id="pill-dropdown" class="pill-dropdown" style="display:none"></div>';
+  h += '</div>';
+  h += '<div class="field-hint">JavaScript expression. Type {{ to insert a column reference.</div>';
+  h += '</div></div>';
   return h;
 }
 
@@ -2052,7 +2112,7 @@ function readFormAction() {
       break;
 
     case 'transform':
-      a.expression = getVal('expression');
+      a.expression = getPillEditorValue('expression') || getVal('expression');
       break;
 
     case 'exec':
@@ -2523,6 +2583,210 @@ function persistConfig(message) {
 /* ═══════════════════════════════════════════════════════════════════════════
    INITIALIZATION
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   PILL EDITOR — column reference pills in expressions
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Build a columnId → columnName map from current tab config */
+function getColumnIdMap() {
+  var tc = getTabConfig();
+  return tc ? tc.columns : {};
+}
+
+/** Build a columnName → columnId reverse map */
+function getColumnNameToIdMap() {
+  var map = getColumnIdMap();
+  var rev = {};
+  for (var id in map) rev[map[id]] = id;
+  return rev;
+}
+
+/** Convert a stored expression (with {{colId}} refs) to HTML with pills */
+function expressionToHtml(expr) {
+  if (!expr) return '';
+  var colMap = getColumnIdMap();
+  // Split on {{...}} tokens, build safe HTML
+  var parts = expr.split(/(\{\{[^}]+\}\})/g);
+  var html = '';
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i];
+    var m = part.match(/^\{\{([^}]+)\}\}$/);
+    if (m) {
+      var ref = m[1].trim();
+      var name = colMap[ref] || ref;
+      var id = colMap[ref] ? ref : '';
+      if (!id) {
+        var rev = getColumnNameToIdMap();
+        id = rev[ref] || '';
+      }
+      html += '<span class="pill" contenteditable="false" data-col-id="' + esc(id || ref) + '">' + esc(name) + '</span>';
+    } else {
+      html += esc(part);
+    }
+  }
+  return html;
+}
+
+/** Serialize pill editor DOM back to expression string with {{colId}} refs */
+function htmlToExpression(editorEl) {
+  var result = '';
+  var nodes = editorEl.childNodes;
+  for (var i = 0; i < nodes.length; i++) {
+    var node = nodes[i];
+    if (node.nodeType === 3) {
+      result += node.textContent;
+    } else if (node.nodeType === 1 && node.classList && node.classList.contains('pill')) {
+      var colId = node.getAttribute('data-col-id');
+      result += '{{' + (colId || node.textContent) + '}}';
+    } else if (node.nodeType === 1) {
+      if (node.tagName === 'BR') result += '\n';
+      else result += node.textContent || '';
+    }
+  }
+  return result.trim();
+}
+
+/** Read value from a pill editor by name */
+function getPillEditorValue(name) {
+  var el = document.querySelector('.pill-editor[data-name="' + name + '"]');
+  return el ? htmlToExpression(el) : '';
+}
+
+/** Set up pill editor event listeners after DOM insert */
+function initPillEditors() {
+  var editors = document.querySelectorAll('.pill-editor');
+  for (var i = 0; i < editors.length; i++) {
+    var editor = editors[i];
+    if (editor._pillInit) continue;
+    editor._pillInit = true;
+    editor.addEventListener('input', handlePillEditorInput);
+    editor.addEventListener('keydown', handlePillEditorKeydown);
+  }
+}
+
+var _pillDropdownItems = [];
+var _pillDropdownIdx = -1;
+var _pillDropdownEditor = null;
+
+function handlePillEditorInput(e) {
+  var editor = e.target.closest('.pill-editor');
+  if (!editor) return;
+  var sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  var range = sel.getRangeAt(0);
+  if (range.startContainer.nodeType !== 3) return;
+  var text = range.startContainer.textContent;
+  var pos = range.startOffset;
+  var before = text.substring(0, pos);
+  var match = before.match(/\{\{([^}]*)$/);
+  if (match) {
+    showPillDropdown(editor, match[1]);
+  } else {
+    hidePillDropdown();
+  }
+}
+
+function handlePillEditorKeydown(e) {
+  var dropdown = document.getElementById('pill-dropdown');
+  if (!dropdown || dropdown.style.display === 'none') return;
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _pillDropdownIdx = Math.min(_pillDropdownIdx + 1, _pillDropdownItems.length - 1);
+    highlightDropdownItem();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _pillDropdownIdx = Math.max(_pillDropdownIdx - 1, 0);
+    highlightDropdownItem();
+  } else if (e.key === 'Enter' && _pillDropdownIdx >= 0) {
+    e.preventDefault();
+    selectDropdownItem(_pillDropdownIdx);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    hidePillDropdown();
+  }
+}
+
+function showPillDropdown(editor, filter) {
+  var dropdown = document.getElementById('pill-dropdown');
+  if (!dropdown) return;
+  _pillDropdownEditor = editor;
+  var colMap = getColumnIdMap();
+  var entries = [];
+  for (var id in colMap) {
+    var name = colMap[id];
+    if (!filter || name.toLowerCase().indexOf(filter.toLowerCase()) >= 0) {
+      entries.push({ id: id, name: name });
+    }
+  }
+  entries.sort(function(a, b) { return a.name.localeCompare(b.name); });
+  _pillDropdownItems = entries;
+  _pillDropdownIdx = entries.length > 0 ? 0 : -1;
+
+  var h = '';
+  if (entries.length === 0) {
+    h = '<div class="pill-dropdown-empty">No columns found</div>';
+  } else {
+    for (var i = 0; i < entries.length; i++) {
+      h += '<div class="pill-dropdown-item' + (i === 0 ? ' active' : '') + '" data-idx="' + i + '" onmousedown="selectDropdownItem(' + i + ')">' + esc(entries[i].name) + '</div>';
+    }
+  }
+  safeSetHTML(dropdown, h);
+  dropdown.style.display = 'block';
+}
+
+function highlightDropdownItem() {
+  var items = document.querySelectorAll('.pill-dropdown-item');
+  for (var i = 0; i < items.length; i++) {
+    items[i].className = 'pill-dropdown-item' + (i === _pillDropdownIdx ? ' active' : '');
+  }
+  if (items[_pillDropdownIdx]) items[_pillDropdownIdx].scrollIntoView({ block: 'nearest' });
+}
+
+function selectDropdownItem(idx) {
+  var entry = _pillDropdownItems[idx];
+  if (!entry || !_pillDropdownEditor) return;
+  hidePillDropdown();
+
+  var sel = window.getSelection();
+  if (!sel.rangeCount) return;
+  var range = sel.getRangeAt(0);
+  var textNode = range.startContainer;
+  if (textNode.nodeType !== 3) return;
+  var text = textNode.textContent;
+  var pos = range.startOffset;
+  var before = text.substring(0, pos);
+  var triggerIdx = before.lastIndexOf('{{');
+  if (triggerIdx === -1) return;
+
+  var beforeText = text.substring(0, triggerIdx);
+  var afterText = text.substring(pos);
+
+  var pill = document.createElement('span');
+  pill.className = 'pill';
+  pill.contentEditable = 'false';
+  pill.setAttribute('data-col-id', entry.id);
+  pill.textContent = entry.name;
+
+  textNode.textContent = beforeText;
+  var parent = textNode.parentNode;
+  var afterNode = document.createTextNode(afterText || '\u200B');
+  parent.insertBefore(pill, textNode.nextSibling);
+  parent.insertBefore(afterNode, pill.nextSibling);
+
+  var newRange = document.createRange();
+  newRange.setStart(afterNode, afterText ? 0 : 1);
+  newRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+}
+
+function hidePillDropdown() {
+  var dropdown = document.getElementById('pill-dropdown');
+  if (dropdown) dropdown.style.display = 'none';
+  _pillDropdownItems = [];
+  _pillDropdownIdx = -1;
+}
+
 function applyInitData(data) {
   state.config = data.config;
   state.columnInfo = data.columnInfo;
