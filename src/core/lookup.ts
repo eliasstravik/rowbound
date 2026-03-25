@@ -30,12 +30,14 @@ export async function executeLookup(
 ): Promise<string | null> {
   const { adapter, spreadsheetId, tabDataCache, onMissing } = options;
 
-  // Resolve the match value from templates
-  const resolvedMatchValue = resolveTemplate(
-    action.matchValue,
-    context,
-    onMissing,
-  );
+  // Resolve the match value — if it's a plain column name (no {{ templates),
+  // read the value from the current row directly
+  let resolvedMatchValue: string;
+  if (action.matchValue.includes("{{")) {
+    resolvedMatchValue = resolveTemplate(action.matchValue, context, onMissing);
+  } else {
+    resolvedMatchValue = context.row[action.matchValue] ?? "";
+  }
   if (!resolvedMatchValue) return null;
 
   // Get source tab data (cached across rows within a pipeline run)
@@ -66,17 +68,33 @@ export async function executeLookup(
     }
   }
 
+  const returnType = action.returnType ?? "value";
+
+  // Boolean: true/false based on whether any match was found
+  if (returnType === "boolean") {
+    return matches.length > 0 ? "true" : "false";
+  }
+
+  // Count: number of matching rows
+  if (returnType === "count") {
+    return String(matches.length);
+  }
+
+  // Rows: full matching row objects as JSON array
+  if (returnType === "rows") {
+    return matches.length > 0 ? JSON.stringify(matches) : null;
+  }
+
+  // Value mode (default): return the returnColumn value
   if (matches.length === 0) return null;
 
-  // Extract return values
+  const returnCol = action.returnColumn ?? action.matchColumn;
   if (mode === "first") {
-    const val = matches[0]![action.returnColumn];
+    const val = matches[0]![returnCol];
     return val !== undefined && val !== "" ? val : null;
   }
 
   // "all" mode: return JSON array of the return column values
-  const values = matches
-    .map((r) => r[action.returnColumn] ?? "")
-    .filter((v) => v !== "");
+  const values = matches.map((r) => r[returnCol] ?? "").filter((v) => v !== "");
   return values.length > 0 ? JSON.stringify(values) : null;
 }

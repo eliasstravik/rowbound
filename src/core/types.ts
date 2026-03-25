@@ -108,13 +108,21 @@ export interface LookupAction {
   sourceTab: string;
   /** Column header in the source tab to match against */
   matchColumn: string;
-  /** Value template to match (e.g. "{{row.email}}") */
+  /** Value to match — either a column name (e.g. "Clean Domain") which reads from the
+   *  current row, or a template (e.g. "{{row.email}}"). Plain strings without {{ are
+   *  treated as column name references. */
   matchValue: string;
   /** Operator for matching (default: "equals") */
   matchOperator?: "equals" | "contains";
-  /** Column header in the source tab to return */
-  returnColumn: string;
-  /** "first" returns first match; "all" returns all matches as JSON array (default: "first") */
+  /** Column header in the source tab to return (used when returnType is "value") */
+  returnColumn?: string;
+  /** What to return (default: "value")
+   *  - "value": the returnColumn value from the first match (or JSON array in "all" mode)
+   *  - "boolean": "true" if any match found, "false" otherwise
+   *  - "count": number of matching rows as a string
+   *  - "rows": JSON array of full matching row objects */
+  returnType?: "value" | "boolean" | "count" | "rows";
+  /** "first" returns first match; "all" returns all matches (default: "first"). Only used with returnType "value". */
   matchMode?: "first" | "all";
 }
 

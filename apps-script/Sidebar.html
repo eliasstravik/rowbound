@@ -614,7 +614,7 @@ function actionSummary(a) {
     case 'waterfall': return (a.providers ? a.providers.length : 0) + ' providers';
     case 'transform': return a.expression || '';
     case 'exec': return a.command || '';
-    case 'lookup': return (a.sourceTab || '?') + ' \u2192 ' + (a.returnColumn || '?');
+    case 'lookup': return (a.sourceTab || '?') + ' \u2192 ' + (a.returnType || 'value');
     case 'write': return (a.mode || 'append') + ' \u2192 ' + (a.destTab || '?');
     case 'script': return a.script || '';
     default: return '';
@@ -1561,14 +1561,25 @@ function buildLookupFields(a) {
 
   h += '<div class="section"><div class="section-title">Match</div>';
   h += field('Match Column', '<input class="field-input" name="matchColumn" value="' + esc(a.matchColumn || '') + '" placeholder="Column header in source tab">');
-  h += field('Match Value', '<input class="field-input" name="matchValue" value="' + esc(a.matchValue || '') + '" placeholder="{{domain}}">',
-    'Template \u2014 compared against each row in match column');
+  h += field('Match Value', '<input class="field-input" name="matchValue" value="' + esc(a.matchValue || '') + '" placeholder="Clean Domain">',
+    'Column name from current row, or template like {{row.email}}');
   h += field('Operator', '<select class="field-select" name="matchOperator">' +
     opt('equals', a.matchOperator) + opt('contains', a.matchOperator) + '</select>');
   h += '</div>';
 
+  var rt = a.returnType || 'boolean';
   h += '<div class="section"><div class="section-title">Return</div>';
+  h += field('Return Type', '<select class="field-select" name="returnType" onchange="toggleLookupReturn(this.value)">' +
+    '<option value="boolean"' + (rt === 'boolean' ? ' selected' : '') + '>Boolean \u2014 true/false if match found</option>' +
+    '<option value="count"' + (rt === 'count' ? ' selected' : '') + '>Count \u2014 number of matching rows</option>' +
+    '<option value="value"' + (rt === 'value' ? ' selected' : '') + '>Value \u2014 a column value from the match</option>' +
+    '<option value="rows"' + (rt === 'rows' ? ' selected' : '') + '>Rows \u2014 JSON array of full matching rows</option></select>');
+  h += '<div id="lookup-return-column" style="' + (rt === 'value' ? '' : 'display:none') + '">';
   h += field('Return Column', '<input class="field-input" name="returnColumn" value="' + esc(a.returnColumn || '') + '" placeholder="Column header to return">');
+  h += field('Match Mode', '<select class="field-select" name="matchMode">' +
+    '<option value="first"' + ((a.matchMode || 'first') === 'first' ? ' selected' : '') + '>First match</option>' +
+    '<option value="all"' + (a.matchMode === 'all' ? ' selected' : '') + '>All matches (JSON array)</option></select>');
+  h += '</div>';
   h += '</div>';
   return h;
 }
@@ -1907,6 +1918,11 @@ function buildTabSelect(name, current) {
   return h + '</select>';
 }
 
+function toggleLookupReturn(type) {
+  var el = document.getElementById('lookup-return-column');
+  if (el) el.style.display = type === 'value' ? '' : 'none';
+}
+
 function buildKvList(name, obj, keyLabel, valLabel) {
   var h = '<div class="kv-list" data-kv="' + esc(name) + '">';
   var keys = Object.keys(obj || {});
@@ -2046,9 +2062,13 @@ function readFormAction() {
       a.matchValue = getVal('matchValue');
       var mOp = getVal('matchOperator');
       if (mOp && mOp !== 'equals') a.matchOperator = mOp;
-      a.returnColumn = getVal('returnColumn');
-      var mMode = getVal('matchMode');
-      if (mMode && mMode !== 'first') a.matchMode = mMode;
+      var rType = getVal('returnType') || 'boolean';
+      a.returnType = rType;
+      if (rType === 'value') {
+        a.returnColumn = getVal('returnColumn');
+        var mMode = getVal('matchMode');
+        if (mMode && mMode !== 'first') a.matchMode = mMode;
+      }
       break;
 
     case 'write':
@@ -2189,7 +2209,7 @@ function onTypeChange(newType) {
   delete a.extract; delete a.onError; delete a.providers;
   delete a.expression; delete a.command; delete a.timeout;
   delete a.sourceTab; delete a.matchColumn; delete a.matchValue;
-  delete a.matchOperator; delete a.returnColumn; delete a.matchMode;
+  delete a.matchOperator; delete a.returnColumn; delete a.matchMode; delete a.returnType;
   delete a.destTab; delete a.columns; delete a.mode;
   delete a.upsertMatch; delete a.expand; delete a.expandPath;
   delete a.script; delete a.args;
@@ -2198,7 +2218,7 @@ function onTypeChange(newType) {
   if (newType === 'waterfall') { a.providers = []; }
   if (newType === 'transform') { a.expression = ''; }
   if (newType === 'exec') { a.command = ''; }
-  if (newType === 'lookup') { a.sourceTab = ''; a.matchColumn = ''; a.matchValue = ''; a.returnColumn = ''; }
+  if (newType === 'lookup') { a.sourceTab = ''; a.matchColumn = ''; a.matchValue = ''; a.returnType = 'boolean'; }
   if (newType === 'write') { a.destTab = ''; a.columns = {}; }
   if (newType === 'script') { a.script = ''; a.args = []; }
   renderEditorContent();
