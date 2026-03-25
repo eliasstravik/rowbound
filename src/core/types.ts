@@ -273,6 +273,12 @@ export interface AiAction {
   when?: string;
   /** AI runtime: "claude" uses `claude -p`, "codex" uses `codex exec` */
   runtime: "claude" | "codex";
+  /** Model to use (e.g. "claude-haiku-4-5-20251001"). Omit for default. */
+  model?: string;
+  /** Max agent tool-use turns (default: 25) */
+  maxTurns?: number;
+  /** Enable tools (web search, file read, etc.). Default: true */
+  tools?: boolean;
   /** Prompt template. Supports {{row.x}} and {{env.X}} references. */
   prompt: string;
   /** Named output fields, each maps to a target column.
@@ -280,6 +286,8 @@ export interface AiAction {
   outputs?: Record<string, AiOutputField>;
   /** Output format: "fields" for named fields, "json" for raw JSON schema */
   outputFormat?: "fields" | "json";
+  /** JSON Schema string (used when outputFormat is "json") */
+  outputSchema?: string;
   /** Timeout in ms (default: 120000 = 2 minutes) */
   timeout?: number;
   onError?: OnErrorConfig;

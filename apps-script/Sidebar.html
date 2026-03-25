@@ -2107,11 +2107,11 @@ function readFormAction() {
       break;
 
     case 'ai':
-      // AI type is stored as an exec action with an auto-generated command
-      a.type = 'exec';
+      // AI type is stored natively — engine handles model, tools, maxTurns
+      a.type = 'ai';
       var aiRuntime = getVal('_ai_runtime') || 'claude';
       var aiModel = getVal('_ai_model').trim();
-      var aiMaxTurns = getVal('_ai_maxTurns').trim() || '25';
+      var aiMaxTurns = parseInt(getVal('_ai_maxTurns').trim() || '25');
       var aiTools = getVal('_ai_tools') === 'true';
       var aiPrompt = getVal('_ai_prompt').trim();
 
@@ -2124,40 +2124,32 @@ function readFormAction() {
       var aiOutputFields = readAiOutputFields();
       var aiOutputSchema = getVal('_ai_outputSchema').trim();
 
-      // Build the output instruction to append to the prompt
-      var outputInstruction = '';
+      // Build outputs object from fields
+      var aiOutputs = {};
       if (aiOutputFormat === 'fields' && aiOutputFields.length > 0) {
-        var schemaObj = {};
         for (var ofi = 0; ofi < aiOutputFields.length; ofi++) {
-          var typeMap = { text: 'string', number: 'number', boolean: 'boolean', url: 'string', email: 'string' };
-          schemaObj[aiOutputFields[ofi].name] = typeMap[aiOutputFields[ofi].type] || 'string';
+          aiOutputs[aiOutputFields[ofi].name] = { type: aiOutputFields[ofi].type || 'text' };
         }
-        outputInstruction = '\n\nYour response must be ONLY a raw JSON object \u2014 no preamble, no commentary, no markdown fences. The very first character must be { and the very last must be }. Schema: ' + JSON.stringify(schemaObj);
       } else if (aiOutputFormat === 'json' && aiOutputSchema) {
-        outputInstruction = '\n\nYour response must be ONLY a raw JSON object \u2014 no preamble, no commentary, no markdown fences. The very first character must be { and the very last must be }. Output must conform to this JSON Schema: ' + aiOutputSchema;
+        // For JSON schema mode, use a single output key
+        aiOutputs = { _schema: { type: 'text' } };
       }
 
-      var fullPrompt = aiPrompt + outputInstruction;
+      // Set engine fields
+      a.runtime = aiRuntime;
+      if (aiModel) a.model = aiModel;
+      a.maxTurns = aiMaxTurns;
+      a.tools = aiTools;
+      a.prompt = aiPrompt;
+      if (Object.keys(aiOutputs).length > 0) a.outputs = aiOutputs;
+      a.outputFormat = aiOutputFormat;
+      if (aiOutputFormat === 'json' && aiOutputSchema) a.outputSchema = aiOutputSchema;
 
-      // Build the exec command
-      var cmd;
-      if (aiRuntime === 'claude') {
-        cmd = 'claude -p';
-        if (aiModel) cmd += ' --model ' + aiModel;
-        if (aiMaxTurns && aiMaxTurns !== '0') cmd += ' --max-turns ' + aiMaxTurns;
-        if (aiTools) cmd += ' --tools default';
-        cmd += " --no-session-persistence '" + fullPrompt.replace(/'/g, "'\\''") + "' < /dev/null";
-      } else {
-        cmd = 'codex exec';
-        if (aiModel) cmd += ' --model ' + aiModel;
-        cmd += " -s read-only '" + fullPrompt.replace(/'/g, "'\\''") + "'";
-      }
-      a.command = cmd;
-      // Tag it so the sidebar can detect it's an AI action when re-editing
+      // Keep sidebar metadata for re-editing
       a._ai_runtime = aiRuntime;
       a._ai_model = aiModel;
-      a._ai_maxTurns = aiMaxTurns;
-      a._ai_prompt = aiPrompt; // Store original prompt WITHOUT output instructions
+      a._ai_maxTurns = String(aiMaxTurns);
+      a._ai_prompt = aiPrompt;
       a._ai_tools = aiTools;
       a._ai_outputFormat = aiOutputFormat;
       a._ai_outputFields = aiOutputFields;

@@ -39,18 +39,28 @@ function buildPrompt(action: AiAction, context: ExecutionContext): string {
 
   const resolvedPrompt = resolveTemplate(action.prompt, sanitizedContext);
 
-  // If outputs are defined, instruct the AI to return structured JSON
+  // If JSON schema mode, append schema instructions
+  if (action.outputFormat === "json" && action.outputSchema) {
+    return `${resolvedPrompt}
+
+IMPORTANT: Respond with ONLY a raw JSON object — no preamble, no commentary, no markdown fences. The very first character must be { and the very last must be }. Output must conform to this JSON Schema: ${action.outputSchema}`;
+  }
+
+  // If fields mode with outputs defined, instruct the AI to return structured JSON
   if (action.outputs && Object.keys(action.outputs).length > 0) {
     const fieldDescriptions = Object.entries(action.outputs)
+      .filter(([name]) => name !== "_schema")
       .map(([name, field]) => `  "${name}": ${field.type}`)
       .join("\n");
 
-    return `${resolvedPrompt}
+    if (fieldDescriptions) {
+      return `${resolvedPrompt}
 
 IMPORTANT: Respond with ONLY a JSON object containing these fields (no markdown, no explanation):
 {
 ${fieldDescriptions}
 }`;
+    }
   }
 
   return resolvedPrompt;
@@ -98,13 +108,16 @@ export async function executeAiAction(
   let command: string;
   if (action.runtime === "claude") {
     // claude -p reads prompt from stdin — safe since stdin is not shell-interpreted.
-    // Don't use --output-format json as it wraps the response in a metadata envelope
-    // that interferes with JSON parsing of the AI's actual output.
     command = `cat "${tmpFile}" | claude -p`;
+    if (action.model) command += ` --model ${action.model}`;
+    const maxTurns = action.maxTurns ?? 25;
+    command += ` --max-turns ${maxTurns}`;
+    if (action.tools !== false) command += " --tools default";
+    command += " --no-session-persistence";
   } else {
     // codex exec — pipe prompt via stdin to avoid shell injection from prompt content.
-    // The $(cat ...) pattern is unsafe because prompt content would be shell-interpreted.
     command = `cat "${tmpFile}" | codex exec --stdin -s read-only`;
+    if (action.model) command += ` --model ${action.model}`;
   }
 
   try {
