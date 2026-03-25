@@ -1365,6 +1365,12 @@ function renderEditorContent() {
   // Type-specific fields
   h += buildTypeFields(a);
 
+  // Environment variables — per-action overrides
+  h += '<div class="section"><div class="section-title">Environment Variables</div>';
+  h += '<p class="field-hint" style="margin-bottom:8px">Per-action env var overrides. Merged into execution environment for this action only.</p>';
+  h += buildKvList('actionEnv', a.env || {}, 'Variable', 'Value');
+  h += '</div>';
+
   // Run conditions — at the bottom
   h += '<div class="section"><div class="section-title">Run Conditions</div>';
   h += field('Only run if', '<textarea class="field-textarea" name="when" placeholder="e.g. {{domain}} !== &#39;&#39;">' + esc(a.when || '') + '</textarea>',
@@ -2024,6 +2030,9 @@ function readFormAction() {
 
   var when = getVal('when').trim();
   if (when) a.when = when;
+
+  var actionEnv = readKvList('actionEnv');
+  if (Object.keys(actionEnv).length > 0) a.env = actionEnv;
 
   switch (type) {
     case 'http':

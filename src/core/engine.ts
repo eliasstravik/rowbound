@@ -337,6 +337,11 @@ export async function runPipeline(
           continue;
         }
 
+        // Merge per-action env overrides into context for this action
+        const actionContext = action.env
+          ? { ...context, env: { ...context.env, ...action.env } }
+          : context;
+
         // Apply per-action delay if configured (clamped to 600s max)
         const rawDelay = (action as { runSettings?: { delay?: number } })
           .runSettings?.delay;
@@ -349,11 +354,11 @@ export async function runPipeline(
         let value: string | null = null;
 
         if (action.type === "transform") {
-          value = evaluateExpression(action.expression, context);
+          value = evaluateExpression(action.expression, actionContext);
         } else if (action.type === "http") {
           value = await executeHttpAction(
             action,
-            context,
+            actionContext,
             rateLimiter,
             retryAttempts,
             signal,
@@ -361,27 +366,31 @@ export async function runPipeline(
             onMissing,
           );
         } else if (action.type === "waterfall") {
-          const waterfallResult = await executeWaterfall(action, context, {
-            rateLimiter,
-            retryAttempts,
-            retryBackoff,
-            signal,
-            onMissing,
-          });
+          const waterfallResult = await executeWaterfall(
+            action,
+            actionContext,
+            {
+              rateLimiter,
+              retryAttempts,
+              retryBackoff,
+              signal,
+              onMissing,
+            },
+          );
           value = waterfallResult?.value ?? null;
         } else if (action.type === "exec") {
-          value = await executeExecAction(action as ExecAction, context, {
+          value = await executeExecAction(action as ExecAction, actionContext, {
             signal,
           });
         } else if (action.type === "lookup") {
-          value = await executeLookup(action as LookupAction, context, {
+          value = await executeLookup(action as LookupAction, actionContext, {
             adapter,
             spreadsheetId: ref.spreadsheetId,
             tabDataCache,
             onMissing,
           });
         } else if (action.type === "write") {
-          value = await executeWrite(action as WriteAction, context, {
+          value = await executeWrite(action as WriteAction, actionContext, {
             adapter,
             spreadsheetId: ref.spreadsheetId,
             dryRun,
@@ -394,22 +403,26 @@ export async function runPipeline(
             throw new Error(`Script "${sa.script}" not found`);
           }
           const resolvedArgs = (sa.args ?? []).map((a) =>
-            resolveTemplate(a, context, onMissing),
+            resolveTemplate(a, actionContext, onMissing),
           );
+          const actionEnv = action.env ? { ...env, ...action.env } : env;
           value = await executeScriptAction(scriptDef, resolvedArgs, {
-            env,
+            env: actionEnv,
             timeout: sa.timeout,
             signal,
             extract: sa.extract,
             onError: sa.onError,
           });
         } else if (action.type === "ai") {
-          // AI action writes output (possibly JSON) to the single target column
-          const aiUpdates = await executeAiAction(action as AiAction, context, {
-            signal,
-            rowIndex: i,
-            columnMap: options.columnMap,
-          });
+          const aiUpdates = await executeAiAction(
+            action as AiAction,
+            actionContext,
+            {
+              signal,
+              rowIndex: i,
+              columnMap: options.columnMap,
+            },
+          );
           value = aiUpdates.length > 0 ? aiUpdates[0]!.value : null;
         }
 

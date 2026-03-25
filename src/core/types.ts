@@ -294,8 +294,16 @@ export interface AiAction {
   runSettings?: ActionRunSettings;
 }
 
-/** Union of all action types */
-export type Action =
+/** Common optional fields shared across all action types */
+export interface ActionCommon {
+  /** Per-action environment variable overrides. Merged into the execution
+   *  context env for this action only. Useful for API keys, browser config
+   *  (e.g. PLAYWRIGHT_HEADLESS=true), feature flags, etc. */
+  env?: Record<string, string>;
+}
+
+/** Union of all action types, with common optional fields */
+export type Action = (
   | HttpAction
   | WaterfallAction
   | TransformAction
@@ -303,7 +311,9 @@ export type Action =
   | LookupAction
   | WriteAction
   | ScriptAction
-  | AiAction;
+  | AiAction
+) &
+  ActionCommon;
 
 /** Per-action rate limit override */
 export interface ActionRateLimit {
