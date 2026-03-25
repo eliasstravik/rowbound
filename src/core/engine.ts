@@ -76,19 +76,39 @@ export interface RunResult {
  * Unlike evaluateCondition (which coerces to boolean), this returns the raw value
  * stringified — used for transform action expressions.
  */
+/**
+ * Pre-process a transform expression to expand {{Column Name}} references
+ * into row["Column Name"] access. This allows users to write simple
+ * Clay-style expressions like:
+ *   {{Email}}.split("@")[1]
+ *   {{First Name}} + " " + {{Last Name}}
+ *   JSON.parse({{data}}).field
+ */
+function expandColumnRefs(expression: string): string {
+  return expression.replace(
+    /\{\{([^}]+)\}\}/g,
+    (_match, columnName: string) => `row[${JSON.stringify(columnName.trim())}]`,
+  );
+}
+
 export function evaluateExpression(
   expression: string,
   context: ExecutionContext,
 ): string {
-  preCheckExpression(expression);
+  // Expand {{Column}} references to row["Column"] before eval
+  const expanded = expandColumnRefs(expression);
+
+  preCheckExpression(expanded);
 
   const rawSandbox = Object.create(null) as Record<string, unknown>;
   rawSandbox.row = { ...context.row };
   rawSandbox.env = context.env;
   rawSandbox.results = context.results ?? {};
+  // Also inject JSON for convenience in expressions
+  rawSandbox.JSON = JSON;
   const sandbox = vm.createContext(rawSandbox);
 
-  const result = vm.runInContext(expression, sandbox, { timeout: 100 });
+  const result = vm.runInContext(expanded, sandbox, { timeout: 100 });
 
   if (result === undefined || result === null) {
     return "";

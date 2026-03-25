@@ -136,7 +136,17 @@ describe("evaluateExpression", () => {
 
   it("throws on syntax errors", () => {
     const context: ExecutionContext = { row: {}, env: {} };
-    expect(() => evaluateExpression("{{invalid}}", context)).toThrow();
+    expect(() => evaluateExpression("if(", context)).toThrow();
+  });
+
+  it("expands {{column}} refs to row access", () => {
+    const context: ExecutionContext = {
+      row: { Email: "test@example.com" },
+      env: {},
+    };
+    expect(evaluateExpression('{{Email}}.split("@")[1]', context)).toBe(
+      "example.com",
+    );
   });
 });
 

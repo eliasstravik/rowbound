@@ -1535,11 +1535,11 @@ function buildProviderCard(p, idx) {
 }
 
 function buildTransformFields(a) {
-  var h = '<div class="section"><div class="section-title">Expression</div>';
-  h += field('JavaScript Expression',
-    '<textarea class="field-textarea" name="expression" rows="3" placeholder="`${first_name} ${last_name}`">' +
+  var h = '<div class="section"><div class="section-title">Formula</div>';
+  h += field('Expression',
+    '<textarea class="field-textarea" name="expression" rows="3" placeholder="{{Email}}.split(&quot;@&quot;)[1]">' +
     esc(a.expression || '') + '</textarea>',
-    'Compute a new value. Access columns via {{column_name}}');
+    'JavaScript expression. Use {{Column Name}} to reference columns.');
   h += '</div>';
   return h;
 }
