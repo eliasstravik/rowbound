@@ -1402,30 +1402,18 @@ function showEditor(action, columnName) {
   state.originalAction = deepCopy(action);
   if (columnName) state.columnInfo.column = columnName;
 
-  // If headers are empty (tab just switched), fetch them before rendering
-  var headers = state.columnInfo ? state.columnInfo.headers : [];
-  if (!headers || headers.length === 0) {
-    var tabName = state.columnInfo ? state.columnInfo.tabName : '';
-    if (tabName) {
-      serverCall('getTabHeaders', tabName, function(err, h) {
-        if (!err && h) state.columnInfo.headers = h;
-        renderHeader(resolveColumnName(action.target), { back: 'showOverview()', columnSelect: true });
-        renderEditorContent();
-      });
-      // Show loading state while headers fetch
-      renderHeader(resolveColumnName(action.target), { back: 'showOverview()' });
-      return;
-    }
-  }
-
-  renderHeader(resolveColumnName(action.target), { back: 'showOverview()', columnSelect: true });
-  renderEditorContent();
-  renderFooter([
-    { label: 'Delete', cls: 'btn-danger', action: 'confirmDelete()' },
-    'spacer',
-    { label: 'Cancel', cls: 'btn-secondary', action: 'cancelEdit()' },
-    { label: 'Save', cls: 'btn-primary', action: 'saveAction()' }
-  ]);
+  // Always fetch fresh headers then render — ensures new columns show up
+  renderHeader(resolveColumnName(action.target), { back: 'showOverview()' });
+  fetchFreshHeaders(function() {
+    renderHeader(resolveColumnName(action.target), { back: 'showOverview()', columnSelect: true });
+    renderEditorContent();
+    renderFooter([
+      { label: 'Delete', cls: 'btn-danger', action: 'confirmDelete()' },
+      'spacer',
+      { label: 'Cancel', cls: 'btn-secondary', action: 'cancelEdit()' },
+      { label: 'Save', cls: 'btn-primary', action: 'saveAction()' }
+    ]);
+  });
 }
 
 function renderEditorContent() {
@@ -1468,28 +1456,17 @@ function showCreate(columnName) {
   state.editingAction = a;
   state.originalAction = null;
 
-  // Ensure fresh headers before rendering column dropdown
-  var headers = state.columnInfo ? state.columnInfo.headers : [];
-  if (!headers || headers.length === 0) {
-    var tabName = state.columnInfo ? state.columnInfo.tabName : '';
-    if (tabName) {
-      serverCall('getTabHeaders', tabName, function(err, h) {
-        if (!err && h) state.columnInfo.headers = h;
-        renderHeader(col, { back: 'showOverview()', columnSelect: true });
-        renderEditorContent();
-      });
-      renderHeader(col, { back: 'showOverview()' });
-      return;
-    }
-  }
-
-  renderHeader(col, { back: 'showOverview()', columnSelect: true });
-  renderEditorContent();
-  renderFooter([
-    { label: 'Cancel', cls: 'btn-secondary', action: 'cancelEdit()' },
-    'spacer',
-    { label: 'Create', cls: 'btn-primary', action: 'saveAction()' }
-  ]);
+  // Always fetch fresh headers then render
+  renderHeader(col, { back: 'showOverview()' });
+  fetchFreshHeaders(function() {
+    renderHeader(col, { back: 'showOverview()', columnSelect: true });
+    renderEditorContent();
+    renderFooter([
+      { label: 'Cancel', cls: 'btn-secondary', action: 'cancelEdit()' },
+      'spacer',
+      { label: 'Create', cls: 'btn-primary', action: 'saveAction()' }
+    ]);
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2662,18 +2639,17 @@ var _colPickerItems = [];
 var _colPickerIdx = -1;
 var _colPickerTarget = null;
 var _colPickerTriggerPos = -1;
-var _headersRefreshing = false;
-
-/** Refresh headers from sheet in background so new columns appear */
-function refreshHeadersIfNeeded() {
-  if (_headersRefreshing || !state.columnInfo) return;
-  _headersRefreshing = true;
-  var tabName = state.columnInfo.tabName;
-  serverCall('getTabHeaders', tabName, function(err, headers) {
-    _headersRefreshing = false;
+/** Force-fetch fresh headers from the sheet. Calls back when done. */
+function fetchFreshHeaders(callback) {
+  if (!state.columnInfo || !state.columnInfo.tabName) {
+    if (callback) callback();
+    return;
+  }
+  serverCall('getTabHeaders', state.columnInfo.tabName, function(err, headers) {
     if (!err && headers) {
       state.columnInfo.headers = headers;
     }
+    if (callback) callback();
   });
 }
 
@@ -2692,7 +2668,7 @@ document.addEventListener('input', function(e) {
     _colPickerTarget = el;
     _colPickerTriggerPos = match.index;
     // Refresh headers in background to catch new columns
-    refreshHeadersIfNeeded();
+    fetchFreshHeaders();
     showColPicker(el, match[1]);
   } else {
     hideColPicker();
