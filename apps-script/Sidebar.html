@@ -829,7 +829,7 @@ function toggleTabEnabled() {
   if (tc) {
     tc.enabled = !isTabEnabled();
     persistConfig(tc.enabled ? 'Tab enabled' : 'Tab disabled');
-    showOverview();
+    refreshCurrentView();
   }
 }
 
@@ -849,7 +849,7 @@ function showOverview() {
   var h = '';
 
   if (!enabled) {
-    h += '<div class="disabled-banner">Processing is paused. No actions will run until re-enabled.</div>';
+    h += '<div class="disabled-banner">Processing is paused. No actions will run until re-enabled in Settings.</div>';
   }
   if (actions.length === 0) {
     h += '<div class="empty-state">';
@@ -898,7 +898,12 @@ function showSources() {
   
 
   var sources = getSources();
+  var enabled = isTabEnabled();
   var h = '';
+
+  if (!enabled) {
+    h += '<div class="disabled-banner">Processing is paused. No sources will run until re-enabled in Settings.</div>';
+  }
 
   if (sources.length === 0) {
     h += '<div class="empty-state">';
