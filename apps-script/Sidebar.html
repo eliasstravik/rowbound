@@ -414,10 +414,10 @@ body {
 
 <div id="app">
   <div id="header"></div>
-  <div id="sheet-tab-selector" style="padding:8px 16px;display:none">
-    <div style="display:flex;align-items:center;margin-bottom:5px">
-      <span style="font-size:12px;color:#5f6368;font-weight:500;flex:1">Sheet</span>
-      <button class="btn-icon" onclick="refreshAll()" title="Refresh" id="refresh-btn" style="font-size:15px;padding:2px 6px;cursor:pointer;color:#999">&#8635;</button>
+  <div id="sheet-tab-selector" style="padding:10px 16px;display:none">
+    <div style="display:flex;align-items:center;margin-bottom:6px">
+      <span style="font-size:15px;color:#202124;font-weight:600;flex:1">Sheet</span>
+      <button onclick="refreshAll()" title="Refresh" id="refresh-btn" style="font-size:14px;padding:4px 10px;cursor:pointer;color:#5f6368;background:#fff;border:1px solid #dadce0;border-radius:4px">&#8635; Sync</button>
     </div>
     <select id="sheet-tab-select" class="field-select" style="width:100%;font-weight:500" onchange="onSheetTabSelect(this.value)">
       <option value="">Loading...</option>
