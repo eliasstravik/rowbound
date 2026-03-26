@@ -2790,7 +2790,7 @@ function updateSheetTabSelector() {
   select.innerHTML = h;
 }
 
-/** Handle sheet tab selection from dropdown — instant switch, no server call needed */
+/** Handle sheet tab selection from dropdown — renders instantly from cached config */
 function onSheetTabSelect(gid) {
   if (!gid || !state.config || !state.columnInfo) return;
   if (gid === state.columnInfo.tabGid) return;
@@ -2802,17 +2802,18 @@ function onSheetTabSelect(gid) {
   }
   if (!tab) return;
 
-  // Update state immediately — config is already loaded for all tabs
+  // Update state and render immediately — config for all tabs is already loaded
   state.columnInfo.tabName = tab.name;
   state.columnInfo.tabGid = tab.gid;
+  state.columnInfo.headers = []; // Clear stale headers
+  ensureConfig();
+  refreshCurrentView();
 
-  // Fetch headers for the new tab (needed for column list)
+  // Fetch headers in background (needed for column dropdown in action editor)
   serverCall('getTabHeaders', tab.name, function(err, headers) {
     if (!err && headers) {
       state.columnInfo.headers = headers;
     }
-    ensureConfig();
-    refreshCurrentView();
   });
 }
 
