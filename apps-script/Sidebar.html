@@ -845,12 +845,6 @@ function showOverview() {
   var actions = getActions();
   var h = '';
 
-  // Enabled/disabled toggle
-  h += '<div class="toggle-row">';
-  h += '<div><div class="toggle-sub">' + (enabled ? 'Pipeline active' : 'Pipeline stopped') + '</div></div>';
-  h += '<div class="toggle ' + (enabled ? 'on' : '') + '" onclick="toggleTabEnabled()"><div class="toggle-knob"></div></div>';
-  h += '</div>';
-
   if (!enabled) {
     h += '<div class="disabled-banner">Processing is paused. No actions will run until re-enabled.</div>';
   }
@@ -1348,7 +1342,15 @@ function showSettings() {
   };
 
   var tabName = state.columnInfo ? state.columnInfo.tabName : 'Tab';
+  var enabled = isTabEnabled();
   var h = '<p class="field-hint" style="margin-bottom:16px">Settings for <strong>' + esc(tabName) + '</strong>. Overrides global defaults.</p>';
+
+  h += '<div class="section"><div class="section-title">Pipeline</div>';
+  h += '<div class="toggle-row">';
+  h += '<div><div class="toggle-sub">' + (enabled ? 'Pipeline active' : 'Pipeline stopped') + '</div></div>';
+  h += '<div class="toggle ' + (enabled ? 'on' : '') + '" onclick="toggleTabEnabled()"><div class="toggle-knob"></div></div>';
+  h += '</div>';
+  h += '</div>';
 
   h += '<div class="section"><div class="section-title">Execution</div>';
   h += field('Concurrency', '<input class="field-input" type="number" min="1" name="concurrency" value="' + esc(s.concurrency) + '">', 'Number of rows to process in parallel');
