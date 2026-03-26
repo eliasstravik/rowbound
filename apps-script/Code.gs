@@ -17,25 +17,6 @@ function onOpen() {
     .addToUi();
 }
 
-// ── Tab change detection via onSelectionChange trigger ────────────────────
-// This fires automatically when the user switches sheets or changes selection.
-// We write the active tab info to PropertiesService so the sidebar can read
-// it instantly (~10ms) instead of polling the sheet API (~300ms).
-
-function onSelectionChange(e) {
-  try {
-    var sheet = e.source.getActiveSheet();
-    var props = PropertiesService.getUserProperties();
-    var info = JSON.stringify({
-      tabName: sheet.getName(),
-      tabGid: String(sheet.getSheetId()),
-      ts: Date.now()
-    });
-    props.setProperty('rb_active_tab', info);
-  } catch (err) {
-    // Silently ignore — trigger failures shouldn't break the spreadsheet
-  }
-}
 
 // ── Sidebar entry points ────────────────────────────────────────────────────
 
@@ -89,13 +70,6 @@ function getInitData() {
     : [];
   var columnName = (col <= headers.length) ? String(headers[col - 1]) : '';
 
-  // Write current tab to properties for fast polling
-  props.setProperty('rb_active_tab', JSON.stringify({
-    tabName: sheet.getName(),
-    tabGid: String(sheet.getSheetId()),
-    ts: Date.now()
-  }));
-
   var configResult = loadConfigWithVersion_();
 
   return {
@@ -116,15 +90,17 @@ function getInitData() {
 }
 
 /**
- * Fast poll endpoint — returns tab info from PropertiesService (~10ms)
- * and config version for change detection. No sheet API calls.
+ * Fast poll endpoint — returns config version + tab list.
+ * Config version is from PropertiesService (~10ms).
+ * Tab list requires one lightweight sheet API call.
  */
 function pollState() {
-  var props = PropertiesService.getUserProperties();
-  var tabJson = props.getProperty('rb_active_tab');
-  var tab = tabJson ? JSON.parse(tabJson) : null;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var version = getConfigVersion_();
-  return { tab: tab, configVersion: version };
+  var tabs = ss.getSheets().map(function(s) {
+    return { name: s.getName(), gid: String(s.getSheetId()) };
+  });
+  return { configVersion: version, tabs: tabs };
 }
 
 /**
@@ -133,15 +109,6 @@ function pollState() {
 function loadConfigFull() {
   var result = loadConfigWithVersion_();
   return result;
-}
-
-/** Returns column headers for the active tab. Called on tab switch. */
-function getActiveTabHeaders() {
-  var sheet = SpreadsheetApp.getActiveSheet();
-  var lastCol = sheet.getLastColumn();
-  if (lastCol === 0) return [];
-  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-  return headers.filter(function(h) { return h !== ''; }).map(String);
 }
 
 /** Returns column headers for a given tab. */

@@ -417,6 +417,11 @@ body {
   <div id="header">
     <div id="header-title"><span>Rowbound</span></div>
   </div>
+  <div id="sheet-tab-selector" style="padding:6px 16px;border-bottom:1px solid #eee">
+    <select id="sheet-tab-select" class="field-select" style="width:100%;font-weight:500" onchange="onSheetTabSelect(this.value)">
+      <option value="">Loading...</option>
+    </select>
+  </div>
   <div id="tab-bar">
     <button class="tab-btn active" onclick="switchTab('overview')" data-tab="overview">Actions</button>
     <button class="tab-btn" onclick="switchTab('sources')" data-tab="sources">Sources</button>
@@ -2787,12 +2792,52 @@ function hidePillDropdown() {
   _pillDropdownIdx = -1;
 }
 
+/** Populate the sheet tab selector dropdown */
+function updateSheetTabSelector() {
+  var select = document.getElementById('sheet-tab-select');
+  if (!select) return;
+  var currentGid = state.columnInfo ? state.columnInfo.tabGid : '';
+  var h = '';
+  for (var i = 0; i < state.tabs.length; i++) {
+    var t = state.tabs[i];
+    h += '<option value="' + esc(t.gid) + '"' + (t.gid === currentGid ? ' selected' : '') + '>' + esc(t.name) + '</option>';
+  }
+  select.innerHTML = h;
+}
+
+/** Handle sheet tab selection from dropdown — instant switch, no server call needed */
+function onSheetTabSelect(gid) {
+  if (!gid || !state.config || !state.columnInfo) return;
+  if (gid === state.columnInfo.tabGid) return;
+
+  // Find the tab
+  var tab = null;
+  for (var i = 0; i < state.tabs.length; i++) {
+    if (state.tabs[i].gid === gid) { tab = state.tabs[i]; break; }
+  }
+  if (!tab) return;
+
+  // Update state immediately — config is already loaded for all tabs
+  state.columnInfo.tabName = tab.name;
+  state.columnInfo.tabGid = tab.gid;
+
+  // Fetch headers for the new tab (needed for column list)
+  serverCall('getTabHeaders', tab.name, function(err, headers) {
+    if (!err && headers) {
+      state.columnInfo.headers = headers;
+    }
+    ensureConfig();
+    refreshCurrentView();
+  });
+}
+
 function applyInitData(data) {
   state.config = data.config;
   state.columnInfo = data.columnInfo;
   state.tabs = data.tabs || [];
   if (data.configVersion !== undefined) _knownConfigVersion = data.configVersion;
   ensureConfig();
+  updateSheetTabSelector();
   switch (data.initialView) {
     case 'overview': showOverview(); break;
     case 'sources': showSources(); break;
@@ -2831,21 +2876,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
 /** Show a skeleton loading state with the new tab name so the user
  *  sees instant feedback while we fetch the tab's config. */
-/** Show a skeleton loading state with the new tab name. */
-function showTabSwitchSkeleton(tabName) {
-  var content = document.getElementById('content');
-  var h = '<div class="toggle-row">';
-  h += '<div><div class="toggle-label">' + esc(tabName) + '</div>';
-  h += '<div class="toggle-sub">Loading\u2026</div></div></div>';
-  h += '<div style="padding: 4px 0;">';
-  h += '<div class="skeleton skeleton-card"></div>';
-  h += '<div class="skeleton skeleton-card"></div>';
-  h += '<div class="skeleton skeleton-card"></div>';
-  h += '</div>';
-  safeSetHTML(content, h);
-  safeSetHTML(document.getElementById('footer'), '');
-}
-
 /** Re-render the current list view (overview/sources/settings). */
 function refreshCurrentView() {
   switch (state.view) {
@@ -2860,9 +2890,9 @@ var _knownConfigVersion = 0;
 var _pollInFlight = false;
 
 /**
- * Single fast poll — reads tab + config version from PropertiesService (~10ms).
- * Only fetches full config or headers when something actually changed.
- * Replaces the old two-loop approach (pollActiveTab every 1s + pollConfigChanges every 10s).
+ * Poll for config changes only (every 10s). Tab switching is handled
+ * instantly by the dropdown selector — no polling needed for that.
+ * Also refreshes the tab list to detect new/renamed/deleted tabs.
  */
 function pollStateChanges() {
   if (state.editingAction || state.editingSource || state.editingScript) return;
@@ -2871,58 +2901,28 @@ function pollStateChanges() {
 
   serverCall('pollState', undefined, function(err, result) {
     _pollInFlight = false;
-    if (err || !result || !state.columnInfo) return;
+    if (err || !result) return;
 
-    var tabChanged = result.tab && result.tab.tabGid !== state.columnInfo.tabGid;
-    var configChanged = result.configVersion !== _knownConfigVersion;
-
-    if (!tabChanged && !configChanged) return;
-
-    if (tabChanged) {
-      // Show skeleton immediately with new tab name
-      showTabSwitchSkeleton(result.tab.tabName);
-      state.columnInfo.tabName = result.tab.tabName;
-      state.columnInfo.tabGid = result.tab.tabGid;
-
-      // Fetch headers for the new tab
-      serverCall('getActiveTabHeaders', undefined, function(hErr, headers) {
-        if (!hErr && headers) {
-          state.columnInfo.headers = headers;
-        }
-
-        if (configChanged) {
-          // Also fetch fresh config
-          serverCall('loadConfigFull', undefined, function(cErr, data) {
-            if (!cErr && data) {
-              state.config = data.config;
-              _knownConfigVersion = data.version;
-              try { sessionStorage.setItem('rb_initData', JSON.stringify({
-                config: data.config, columnInfo: state.columnInfo,
-                tabs: state.tabs, initialView: state.view
-              })); } catch (e) {}
-            }
-            ensureConfig();
-            refreshCurrentView();
-          });
-        } else {
-          ensureConfig();
-          refreshCurrentView();
-        }
-      });
-    } else if (configChanged) {
-      // Only config changed (external CLI/MCP edit), no tab switch
-      serverCall('loadConfigFull', undefined, function(cErr, data) {
-        if (!cErr && data) {
-          state.config = data.config;
-          _knownConfigVersion = data.version;
-          try { sessionStorage.setItem('rb_initData', JSON.stringify({
-            config: data.config, columnInfo: state.columnInfo,
-            tabs: state.tabs, initialView: state.view
-          })); } catch (e) {}
-          refreshCurrentView();
-        }
-      });
+    // Refresh tab list (detect new/renamed/deleted tabs)
+    if (result.tabs) {
+      state.tabs = result.tabs;
+      updateSheetTabSelector();
     }
+
+    // Check if config version changed (CLI/MCP edit)
+    if (result.configVersion === _knownConfigVersion) return;
+
+    serverCall('loadConfigFull', undefined, function(cErr, data) {
+      if (!cErr && data) {
+        state.config = data.config;
+        _knownConfigVersion = data.version;
+        try { sessionStorage.setItem('rb_initData', JSON.stringify({
+          config: data.config, columnInfo: state.columnInfo,
+          tabs: state.tabs, initialView: state.view
+        })); } catch (e) {}
+        refreshCurrentView();
+      }
+    });
   });
 }
 </script>
