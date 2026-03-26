@@ -657,8 +657,11 @@ function findActionByTarget(col) {
   return null;
 }
 
-function generateId(col, type) {
-  return type + '_' + col.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+function generateId() {
+  var chars = '0123456789abcdef';
+  var id = '';
+  for (var i = 0; i < 8; i++) id += chars.charAt(Math.floor(Math.random() * 16));
+  return id;
 }
 
 function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }
@@ -977,7 +980,6 @@ function renderSourceEditorContent() {
   var h = '';
 
   h += '<div class="section"><div class="section-title">Source</div>';
-  h += field('ID', '<input class="field-input" name="src_id" value="' + esc(s.id) + '">', 'Unique identifier');
   h += field('Type', '<select class="field-select" name="src_type" onchange="onSourceTypeChange(this.value)">' +
     labelOpt('webhook', 'Webhook', s.type) + labelOpt('http', 'HTTP', s.type) + labelOpt('ai', 'AI', s.type) + labelOpt('exec', 'Exec', s.type) + labelOpt('script', 'Script', s.type) + '</select>');
   h += '</div>';
@@ -1146,7 +1148,7 @@ function onSourceTypeChange(newType) {
 
 function readFormSource() {
   var type = getVal('src_type');
-  var s = { id: getVal('src_id').trim() || 'source_1', type: type };
+  var s = { id: (state.editingSource && state.editingSource.id) || generateId(), type: type };
 
   if (type === 'http') {
     s.method = getVal('src_method') || 'POST';
@@ -1428,9 +1430,8 @@ function renderEditorContent() {
   var a = state.editingAction;
   var h = '';
 
-  // Action ID & Type
+  // Action Type
   h += '<div class="section"><div class="section-title">Action</div>';
-  h += field('ID', '<input class="field-input" name="id" value="' + esc(a.id) + '">', 'Unique identifier for this action');
   h += field('Type', buildTypeSelect(a.type));
   h += '</div>';
 
@@ -1460,7 +1461,7 @@ function showCreate(columnName) {
   updateTabBar('create');
   var col = columnName || (state.columnInfo ? state.columnInfo.column : 'new_column');
   if (state.columnInfo) state.columnInfo.column = col;
-  var a = { id: generateId(col, 'http'), type: 'http', target: col, method: 'GET', url: '', extract: '' };
+  var a = { id: generateId(), type: 'http', target: col, method: 'GET', url: '', extract: '' };
   state.editingAction = a;
   state.originalAction = null;
 
@@ -2093,7 +2094,7 @@ function toggleUpsert(mode) {
 function readFormAction() {
   var type = getVal('type');
   var a = {
-    id: getVal('id').trim() || generateId(state.columnInfo.column, type),
+    id: (state.editingAction && state.editingAction.id) || generateId(),
     type: type,
     target: state.columnInfo.column
   };
@@ -2265,9 +2266,8 @@ function readProviders() {
    ═══════════════════════════════════════════════════════════════════════════ */
 function onTypeChange(newType) {
   var a = state.editingAction;
-  // Preserve when and id from current form
+  // Preserve when from current form
   a.when = getVal('when');
-  a.id = generateId(a.target, newType);
   a.type = newType;
   // Clear type-specific fields
   delete a.method; delete a.url; delete a.headers; delete a.body;
