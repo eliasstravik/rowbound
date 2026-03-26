@@ -419,8 +419,7 @@ body {
   <div id="header">
     <div id="header-title"><span>Rowbound</span></div>
   </div>
-  <div id="sheet-tab-selector" style="padding:8px 16px 6px;border-bottom:1px solid #eee">
-    <div style="font-size:11px;color:#80868b;margin-bottom:4px;font-weight:500">Sheet</div>
+  <div id="sheet-tab-selector" style="padding:6px 16px 8px">
     <select id="sheet-tab-select" class="field-select" style="width:100%;font-weight:500" onchange="onSheetTabSelect(this.value)">
       <option value="">Loading...</option>
     </select>
@@ -846,7 +845,7 @@ function showOverview() {
   state.view = 'overview';
   state.lastListView = 'overview';
   updateTabBar('overview');
-  renderHeader('Actions');
+  renderHeader('Sheet');
 
   var enabled = isTabEnabled();
   var actions = getActions();
@@ -898,7 +897,7 @@ function showSources() {
   state.view = 'sources';
   state.lastListView = 'sources';
   updateTabBar('sources');
-  renderHeader('Sources');
+  renderHeader('Sheet');
 
   var sources = getSources();
   var h = '';
@@ -1336,7 +1335,7 @@ function showSettings() {
   state.view = 'settings';
   state.lastListView = 'settings';
   updateTabBar('settings');
-  renderHeader('Settings');
+  renderHeader('Sheet');
   ensureConfig();
   // Per-tab settings override global
   var global = state.config.settings || {};
