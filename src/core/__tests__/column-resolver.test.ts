@@ -216,7 +216,7 @@ describe("reconcile", () => {
         actions: [
           {
             id: "action1",
-            type: "transform",
+            type: "formula",
             target: "aaa",
             expression: "'test'",
           },
@@ -248,7 +248,7 @@ describe("reconcile", () => {
         actions: [
           {
             id: "action1",
-            type: "transform",
+            type: "formula",
             target: "company_name",
             expression: "'test'",
           },
@@ -297,7 +297,7 @@ describe("reconcile", () => {
     const config = makeConfig([
       {
         id: "extract_handle",
-        type: "transform",
+        type: "formula",
         target: "handle",
         expression: "'test'",
       },
@@ -322,7 +322,7 @@ describe("reconcile", () => {
     const config = makeConfig([
       {
         id: "extract_handle",
-        type: "transform",
+        type: "formula",
         target: "Expert handle",
         expression: "'test'",
       },
@@ -356,13 +356,13 @@ describe("reconcile", () => {
         actions: [
           {
             id: "action1",
-            type: "transform",
+            type: "formula",
             target: "aaa",
             expression: "'test'",
           },
           {
             id: "action2",
-            type: "transform",
+            type: "formula",
             target: "bbb",
             expression: "'test'",
           },
@@ -392,7 +392,7 @@ describe("reconcile", () => {
       [
         {
           id: "action1",
-          type: "transform",
+          type: "formula",
           target: "email",
           expression: "'test'",
         },
@@ -521,7 +521,7 @@ describe("reconcile", () => {
         name: "Other",
         columns: { zzz: "data" },
         actions: [
-          { id: "s1", type: "transform", target: "zzz", expression: "'x'" },
+          { id: "s1", type: "formula", target: "zzz", expression: "'x'" },
         ],
       },
     });
@@ -542,7 +542,7 @@ describe("engine with columnMap (ID-keyed rows)", () => {
     const config = makeConfig([
       {
         id: "greet",
-        type: "transform",
+        type: "formula",
         target: "col_greeting",
         expression: "'Hi ' + row.col_name",
       },
@@ -571,7 +571,7 @@ describe("engine with columnMap (ID-keyed rows)", () => {
     const config = makeConfig([
       {
         id: "extract",
-        type: "transform",
+        type: "formula",
         target: "col_result",
         expression: "row.col_url.split('/').pop()",
       },
@@ -597,7 +597,7 @@ describe("engine with columnMap (ID-keyed rows)", () => {
     const config = makeConfig([
       {
         id: "greet",
-        type: "transform",
+        type: "formula",
         target: "greeting",
         expression: "'Hi ' + row.name",
       },

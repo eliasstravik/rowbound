@@ -30,7 +30,7 @@ describe("sortActionsByDependency", () => {
     const actions: Action[] = [
       {
         id: "c",
-        type: "transform",
+        type: "formula",
         target: "col_c",
         expression: "row.col_b.toUpperCase()",
       },
@@ -44,9 +44,9 @@ describe("sortActionsByDependency", () => {
       },
       {
         id: "b",
-        type: "transform",
+        type: "formula",
         target: "col_b",
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional transform expression
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional formula expression
         expression: "`${row.col_a} enriched`",
       },
     ];
@@ -85,14 +85,14 @@ describe("sortActionsByDependency", () => {
     const actions: Action[] = [
       {
         id: "step2",
-        type: "transform",
+        type: "formula",
         target: "result",
         when: "row.validated === 'true'",
         expression: "'done'",
       },
       {
         id: "step1",
-        type: "transform",
+        type: "formula",
         target: "validated",
         expression: "'true'",
       },
@@ -105,8 +105,8 @@ describe("sortActionsByDependency", () => {
   it("detects circular dependencies and falls back to config order", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const actions: Action[] = [
-      { id: "a", type: "transform", target: "col_a", expression: "row.col_b" },
-      { id: "b", type: "transform", target: "col_b", expression: "row.col_a" },
+      { id: "a", type: "formula", target: "col_a", expression: "row.col_b" },
+      { id: "b", type: "formula", target: "col_b", expression: "row.col_a" },
     ];
     const sorted = sortActionsByDependency(actions);
     // Both are in the cycle — should appear (in config order as fallback)
@@ -119,7 +119,7 @@ describe("sortActionsByDependency", () => {
 
   it("handles single action", () => {
     const actions: Action[] = [
-      { id: "only", type: "transform", target: "out", expression: "'hello'" },
+      { id: "only", type: "formula", target: "out", expression: "'hello'" },
     ];
     expect(sortActionsByDependency(actions)).toEqual(actions);
   });
@@ -168,7 +168,7 @@ describe("sortActionsByDependency", () => {
       },
       {
         id: "name",
-        type: "transform",
+        type: "formula",
         target: "full_name",
         expression: "'John Doe'",
       },

@@ -273,7 +273,7 @@ body {
 }
 .badge-http      { background: #e8f0fe; color: #1a73e8; }
 .badge-waterfall { background: #e6f4ea; color: #188038; }
-.badge-transform { background: #fef7e0; color: #ea8600; }
+.badge-formula { background: #fef7e0; color: #ea8600; }
 .badge-exec      { background: #fce8e6; color: #d93025; }
 .badge-ai        { background: #f3e8fd; color: #7c3aed; }
 .badge-lookup    { background: #f3e8fd; color: #8430ce; }
@@ -672,7 +672,7 @@ function actionSummary(a) {
   switch (a.type) {
     case 'http': return (a.method || 'GET') + ' ' + (a.url || '');
     case 'waterfall': return (a.providers ? a.providers.length : 0) + ' providers';
-    case 'transform': return a.expression || '';
+    case 'formula': return a.expression || '';
     case 'exec': return a.command || '';
     case 'lookup': return (a.sourceTab || '?') + ' \u2192 ' + (a.returnType || 'value');
     case 'write': return (a.mode || 'append') + ' \u2192 ' + (a.destTab || '?');
@@ -1495,7 +1495,7 @@ function showCreatePrompt(col) {
    TYPE-SPECIFIC FORM BUILDERS
    ═══════════════════════════════════════════════════════════════════════════ */
 function buildTypeSelect(current) {
-  var types = ['http', 'ai', 'exec', 'transform', 'script', 'waterfall', 'lookup', 'write'];
+  var types = ['http', 'ai', 'exec', 'formula', 'script', 'waterfall', 'lookup', 'write'];
   var h = '<select class="field-select" name="type" onchange="onTypeChange(this.value)">';
   for (var i = 0; i < types.length; i++) {
     h += '<option value="' + types[i] + '"' + (types[i] === current ? ' selected' : '') + '>' +
@@ -1508,7 +1508,7 @@ function buildTypeFields(a) {
   switch (a.type) {
     case 'http': return buildHttpFields(a);
     case 'waterfall': return buildWaterfallFields(a);
-    case 'transform': return buildTransformFields(a);
+    case 'formula': return buildFormulaFields(a);
     case 'exec': return buildExecFields(a);
     case 'lookup': return buildLookupFields(a);
     case 'write': return buildWriteFields(a);
@@ -1595,7 +1595,7 @@ function buildProviderCard(p, idx) {
   return h;
 }
 
-function buildTransformFields(a) {
+function buildFormulaFields(a) {
   var h = '<div class="section"><div class="section-title">Formula</div>';
   h += '<div class="field"><span class="field-label">Expression</span>';
   h += '<div style="position:relative">';
@@ -2116,7 +2116,7 @@ function readFormAction() {
       a.providers = readProviders();
       break;
 
-    case 'transform':
+    case 'formula':
       a.expression = getPillEditorValue('expression') || getVal('expression');
       break;
 
@@ -2282,7 +2282,7 @@ function onTypeChange(newType) {
   // Set defaults per type
   if (newType === 'http') { a.method = 'GET'; a.url = ''; a.extract = ''; }
   if (newType === 'waterfall') { a.providers = []; }
-  if (newType === 'transform') { a.expression = ''; }
+  if (newType === 'formula') { a.expression = ''; }
   if (newType === 'exec') { a.command = ''; }
   if (newType === 'lookup') { a.sourceTab = ''; a.matchColumn = ''; a.matchValue = ''; a.returnType = 'boolean'; }
   if (newType === 'write') { a.destTab = ''; a.columns = {}; }

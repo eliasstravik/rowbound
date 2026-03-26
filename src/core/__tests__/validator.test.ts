@@ -70,7 +70,7 @@ describe("validateConfig", () => {
         },
         {
           id: "action3",
-          type: "transform",
+          type: "formula",
           target: "Col3",
           expression: "row.first + ' ' + row.last",
         },
@@ -270,15 +270,15 @@ describe("validateConfig", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Missing required fields — transform
+  // Missing required fields — formula
   // -------------------------------------------------------------------------
 
-  it("detects missing expression in transform action", () => {
+  it("detects missing expression in formula action", () => {
     const config = validConfig({
       actions: [
         {
           id: "bad_tf",
-          type: "transform",
+          type: "formula",
           target: "Col",
           expression: "",
         },
@@ -287,7 +287,7 @@ describe("validateConfig", () => {
     const result = validateConfig(config);
     expect(result.valid).toBe(false);
     expect(result.errors).toContainEqual(
-      expect.stringContaining("transform action missing 'expression'"),
+      expect.stringContaining("formula action missing 'expression'"),
     );
   });
 

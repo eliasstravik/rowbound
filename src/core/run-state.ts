@@ -6,7 +6,7 @@ import type { PipelineConfig } from "./types.js";
 
 export interface ActionSummary {
   actionId: string;
-  type: string; // "http" | "waterfall" | "transform" | "exec"
+  type: string; // "http" | "waterfall" | "formula" | "exec"
   target: string;
   success: number; // count of rows where action produced a value
   skipped: number; // count of rows where condition was false or value was null

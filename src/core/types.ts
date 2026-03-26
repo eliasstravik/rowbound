@@ -76,10 +76,10 @@ export interface WaterfallAction {
   runSettings?: ActionRunSettings;
 }
 
-/** Transform action: computes a value from existing data */
-export interface TransformAction {
+/** Formula action: computes a value from existing data */
+export interface FormulaAction {
   id: string;
-  type: "transform";
+  type: "formula";
   target: string;
   when?: string;
   expression: string;
@@ -306,7 +306,7 @@ export interface ActionCommon {
 export type Action = (
   | HttpAction
   | WaterfallAction
-  | TransformAction
+  | FormulaAction
   | ExecAction
   | LookupAction
   | WriteAction

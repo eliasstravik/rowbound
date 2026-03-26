@@ -3,6 +3,7 @@ import { JSONPath } from "jsonpath-plus";
 import type {
   ExecAction,
   ExecSource,
+  FormulaAction,
   HttpAction,
   HttpSource,
   LookupAction,
@@ -10,7 +11,6 @@ import type {
   ScriptAction,
   ScriptSource,
   Source,
-  TransformAction,
   WaterfallAction,
   WriteAction,
 } from "./types.js";
@@ -29,7 +29,7 @@ const CONFIG_SIZE_WARN = 25_000;
 const VALID_ACTION_TYPES = new Set([
   "http",
   "waterfall",
-  "transform",
+  "formula",
   "exec",
   "lookup",
   "write",
@@ -280,10 +280,10 @@ export function validateConfig(config: PipelineConfig): ValidationResult {
           }
         }
       }
-    } else if (action.type === "transform") {
-      const transformAction = action as TransformAction;
-      if (!transformAction.expression) {
-        errors.push(`${label}: transform action missing 'expression'`);
+    } else if (action.type === "formula") {
+      const formulaAction = action as FormulaAction;
+      if (!formulaAction.expression) {
+        errors.push(`${label}: formula action missing 'expression'`);
       }
     } else if (action.type === "exec") {
       const execAction = action as ExecAction;

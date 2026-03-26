@@ -19,7 +19,7 @@ const testConfig: PipelineConfig = {
     },
     {
       id: "score",
-      type: "transform",
+      type: "formula",
       target: "Score",
       expression: "row.Revenue > 1000 ? 'high' : 'low'",
     },

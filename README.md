@@ -361,14 +361,14 @@ Try multiple providers in order. First non-empty result wins.
 }
 ```
 
-### transform
+### formula
 
 Compute a value with a sandboxed JavaScript expression.
 
 ```json
 {
   "id": "full_name",
-  "type": "transform",
+  "type": "formula",
   "target": "full_name",
   "expression": "`${row.first_name} ${row.last_name}`"
 }
@@ -513,7 +513,7 @@ npm run dev -- <command>
 
 ## Security
 
-- **Expression sandbox** — `when` conditions and transform expressions run in Node.js `vm.runInContext` with keyword blocking; convenience sandbox, not a security boundary
+- **Expression sandbox** — `when` conditions and formula expressions run in Node.js `vm.runInContext` with keyword blocking; convenience sandbox, not a security boundary
 - **Exec actions** — shell commands run locally; template values are shell-escaped but use only with trusted data
 - **SSRF protection** — HTTP requests enforce HTTPS by default and block private/internal IP ranges; set `ROWBOUND_ALLOW_HTTP=true` for local dev
 - **Webhook auth** — set `ROWBOUND_WEBHOOK_TOKEN` to require bearer token authentication; server binds to localhost by default

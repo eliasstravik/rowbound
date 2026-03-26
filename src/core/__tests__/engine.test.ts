@@ -158,7 +158,7 @@ describe("runPipeline", () => {
     mockExecuteExecAction.mockReset();
   });
 
-  it("processes transform actions", async () => {
+  it("processes formula actions", async () => {
     const adapter = new MockAdapter([
       { first_name: "Alice", last_name: "Smith", full_name: "" },
       { first_name: "Bob", last_name: "Jones", full_name: "" },
@@ -167,7 +167,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "concat_name",
-        type: "transform",
+        type: "formula",
         target: "full_name",
         expression: "row.first_name + ' ' + row.last_name",
       },
@@ -265,7 +265,7 @@ describe("runPipeline", () => {
     ]);
   });
 
-  it("full pipeline with transform + http + waterfall", async () => {
+  it("full pipeline with formula + http + waterfall", async () => {
     const adapter = new MockAdapter([
       { first: "Alice", last: "Smith", full_name: "", title: "", email: "" },
     ]);
@@ -273,7 +273,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "concat",
-        type: "transform",
+        type: "formula",
         target: "full_name",
         expression: "row.first + ' ' + row.last",
       },
@@ -384,13 +384,13 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "concat",
-        type: "transform",
+        type: "formula",
         target: "full_name",
         expression: "row.first + ' ' + row.last",
       },
       {
         id: "greet",
-        type: "transform",
+        type: "formula",
         target: "greeting",
         expression: "'Hello, ' + row.full_name + '!'",
       },
@@ -425,7 +425,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "concat",
-        type: "transform",
+        type: "formula",
         target: "full_name",
         expression: "row.first + ' ' + row.last",
       },
@@ -450,13 +450,13 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "action_a",
-        type: "transform",
+        type: "formula",
         target: "a",
         expression: "'value_a'",
       },
       {
         id: "action_b",
-        type: "transform",
+        type: "formula",
         target: "b",
         expression: "'value_b'",
       },
@@ -486,7 +486,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "greet",
-        type: "transform",
+        type: "formula",
         target: "result",
         expression: "'Hi ' + row.name",
       },
@@ -522,7 +522,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "compute",
-        type: "transform",
+        type: "formula",
         target: "result",
         expression: "row.value === 'bad' ? undefined_var.crash : 'good'",
       },
@@ -557,7 +557,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "greet",
-        type: "transform",
+        type: "formula",
         target: "greeting",
         expression: "'Hi ' + row.name",
       },
@@ -602,7 +602,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "copy",
-        type: "transform",
+        type: "formula",
         target: "y",
         expression: "row.x",
       },
@@ -674,7 +674,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "tag",
-        type: "transform",
+        type: "formula",
         target: "tag",
         expression: "env.SOURCE",
       },
@@ -699,7 +699,7 @@ describe("runPipeline", () => {
     const config = makeConfig([
       {
         id: "noop",
-        type: "transform",
+        type: "formula",
         target: "x",
         expression: "row.x",
       },

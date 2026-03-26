@@ -93,7 +93,7 @@ const actionConfigSchema = z
     type: z
       .enum([
         "http",
-        "transform",
+        "formula",
         "exec",
         "waterfall",
         "lookup",
@@ -222,7 +222,7 @@ const actionPatchSchema = z
     type: z
       .enum([
         "http",
-        "transform",
+        "formula",
         "exec",
         "waterfall",
         "lookup",

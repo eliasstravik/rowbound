@@ -50,7 +50,7 @@ const FORBIDDEN_KEYWORDS = [
  * Throws if the expression contains any keyword that could be used
  * to escape the vm sandbox.
  *
- * Exported so engine.ts can use the same check for transform expressions.
+ * Exported so engine.ts can use the same check for formula expressions.
  */
 export function preCheckExpression(expr: string): void {
   for (const keyword of FORBIDDEN_KEYWORDS) {

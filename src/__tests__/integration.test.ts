@@ -305,14 +305,14 @@ describe("Integration: full pipeline without mocking core modules", () => {
       const config = makeConfig([
         {
           id: "concat_name",
-          type: "transform",
+          type: "formula",
           target: "full_name",
           // biome-ignore lint/suspicious/noTemplateCurlyInString: this is a JS expression string for the engine VM, not a TS template
           expression: "`${row.first_name} ${row.last_name}`",
         },
         {
           id: "extract_domain",
-          type: "transform",
+          type: "formula",
           target: "domain",
           expression: "row.email.split('@')[1]",
         },
@@ -343,7 +343,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
       ]);
     });
 
-    it("chains transforms using in-memory row state", async () => {
+    it("chains formulas using in-memory row state", async () => {
       const adapter = new InMemoryAdapter([
         { first: "Alice", last: "Smith", full_name: "", greeting: "" },
       ]);
@@ -351,13 +351,13 @@ describe("Integration: full pipeline without mocking core modules", () => {
       const config = makeConfig([
         {
           id: "concat",
-          type: "transform",
+          type: "formula",
           target: "full_name",
           expression: "row.first + ' ' + row.last",
         },
         {
           id: "greet",
-          type: "transform",
+          type: "formula",
           target: "greeting",
           expression: "'Hello, ' + row.full_name + '!'",
         },
@@ -392,7 +392,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
       const config = makeConfig([
         {
           id: "extract_domain",
-          type: "transform",
+          type: "formula",
           target: "domain",
           when: "row.email !== ''",
           expression: "row.email.split('@')[1]",
@@ -430,7 +430,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
       const config = makeConfig([
         {
           id: "greet",
-          type: "transform",
+          type: "formula",
           target: "greeting",
           expression: "'Hello, ' + row.name",
         },
@@ -460,7 +460,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
       const config = makeConfig([
         {
           id: "tag_source",
-          type: "transform",
+          type: "formula",
           target: "tag",
           when: "row.source === env.TARGET_SOURCE",
           expression: "'tagged'",
@@ -494,7 +494,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
       const config = makeConfig([
         {
           id: "concat",
-          type: "transform",
+          type: "formula",
           target: "full_name",
           expression: "row.first + ' ' + row.last",
         },
@@ -634,7 +634,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
       ]);
     });
 
-    it("transform expression error is recorded and does not halt pipeline", async () => {
+    it("formula expression error is recorded and does not halt pipeline", async () => {
       const adapter = new InMemoryAdapter([
         { value: "ok", result: "" },
         { value: "bad", result: "" },
@@ -644,7 +644,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
       const config = makeConfig([
         {
           id: "compute",
-          type: "transform",
+          type: "formula",
           target: "result",
           expression:
             "row.value === 'bad' ? undefined_var.crash : row.value.toUpperCase()",
@@ -681,7 +681,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
   // 7. Multi-action pipeline: HTTP + Transform + Waterfall
   // -----------------------------------------------------------------------
   describe("Multi-action pipeline", () => {
-    it("chains HTTP, transform, and waterfall actions across rows", async () => {
+    it("chains HTTP, formula, and waterfall actions across rows", async () => {
       const adapter = new InMemoryAdapter([
         {
           domain: "acme.com",
@@ -702,7 +702,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
         },
         {
           id: "upper",
-          type: "transform",
+          type: "formula",
           target: "upper_company",
           expression: "row.company_name.toUpperCase()",
         },
@@ -782,7 +782,7 @@ describe("Integration: full pipeline without mocking core modules", () => {
       const config = makeConfig([
         {
           id: "copy_domain",
-          type: "transform",
+          type: "formula",
           target: "col_fullname",
           expression: "'Name for ' + row.col_domain",
         },

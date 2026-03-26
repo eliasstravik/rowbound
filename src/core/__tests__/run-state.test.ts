@@ -26,7 +26,7 @@ const testConfig: PipelineConfig = {
     },
     {
       id: "score",
-      type: "transform",
+      type: "formula",
       target: "Score",
       expression: "row.Revenue > 1000 ? 'high' : 'low'",
     },
@@ -113,7 +113,7 @@ describe("createRunState", () => {
     });
     expect(state.actionSummaries[1]).toEqual({
       actionId: "score",
-      type: "transform",
+      type: "formula",
       target: "Score",
       success: 0,
       skipped: 0,

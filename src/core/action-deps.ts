@@ -59,7 +59,7 @@ function getActionDependencies(action: Action): Set<string> {
         }
       }
     }
-  } else if (action.type === "transform") {
+  } else if (action.type === "formula") {
     for (const ref of extractExpressionRefs(action.expression)) deps.add(ref);
   } else if (action.type === "exec") {
     for (const ref of extractTemplateRefs(action.command)) deps.add(ref);

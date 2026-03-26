@@ -74,10 +74,10 @@ export interface RunResult {
  * Do not rely on this for untrusted code execution.
  *
  * Unlike evaluateCondition (which coerces to boolean), this returns the raw value
- * stringified — used for transform action expressions.
+ * stringified — used for formula action expressions.
  */
 /**
- * Pre-process a transform expression to expand {{ref}} references
+ * Pre-process a formula expression to expand {{ref}} references
  * into row["Column Name"] access. Supports both:
  *   - Column names: {{Email}}, {{First Name}}
  *   - Column IDs: {{497d7283}} (resolved via columnMap to current name)
@@ -385,7 +385,7 @@ export async function runPipeline(
 
         let value: string | null = null;
 
-        if (action.type === "transform") {
+        if (action.type === "formula") {
           value = evaluateExpression(
             action.expression,
             actionContext,
