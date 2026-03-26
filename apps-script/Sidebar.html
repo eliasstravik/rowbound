@@ -1279,8 +1279,8 @@ function saveSource() {
   }
   setSources(sources);
   persistConfig(found >= 0 ? 'Source updated' : 'Source created');
-  state.editingSource = deepCopy(newSource);
-  state.originalSource = deepCopy(newSource);
+  state.editingSource = null;
+  state.originalSource = null;
   showSources();
 }
 
@@ -2336,12 +2336,9 @@ function saveAction() {
   }
   setActions(actions);
   persistConfig(isUpdate ? 'Action updated' : 'Action created');
-  if (isUpdate) {
-    state.editingAction = deepCopy(newAction);
-    state.originalAction = deepCopy(newAction);
-  } else {
-    showOverview();
-  }
+  state.editingAction = null;
+  state.originalAction = null;
+  showOverview();
 }
 
 function cancelEdit() {
