@@ -416,7 +416,7 @@ body {
   <div id="header">
     <div id="header-title"><span>Rowbound</span></div>
   </div>
-  <div id="sheet-tab-selector" style="padding:6px 16px 8px">
+  <div id="sheet-tab-selector" style="padding:6px 16px 8px;display:none">
     <div style="display:flex;gap:6px;align-items:center">
       <select id="sheet-tab-select" class="field-select" style="flex:1;font-weight:500" onchange="onSheetTabSelect(this.value)">
         <option value="">Loading...</option>
@@ -424,14 +424,15 @@ body {
       <button class="btn-icon" onclick="refreshAll()" title="Refresh" id="refresh-btn" style="font-size:16px;padding:4px 6px;border:1px solid #dadce0;border-radius:4px;background:#fff;cursor:pointer">&#8635;</button>
     </div>
   </div>
-  <div id="tab-bar">
+  <div id="tab-bar" style="display:none">
     <button class="tab-btn active" onclick="switchTab('overview')" data-tab="overview">Actions</button>
     <button class="tab-btn" onclick="switchTab('sources')" data-tab="sources">Sources</button>
     <button class="tab-btn" onclick="switchTab('settings')" data-tab="settings">Settings</button>
   </div>
   <div id="content">
-    <div style="padding: 4px 0;">
-      <div class="skeleton skeleton-header"></div>
+    <div style="padding: 16px;">
+      <div class="skeleton" style="height:32px;width:50%;margin-bottom:16px;border-radius:6px"></div>
+      <div class="skeleton skeleton-card"></div>
       <div class="skeleton skeleton-card"></div>
       <div class="skeleton skeleton-card"></div>
       <div class="skeleton skeleton-card"></div>
@@ -2911,6 +2912,12 @@ function applyInitData(data) {
   if (data.configVersion !== undefined) _knownConfigVersion = data.configVersion;
   ensureConfig();
   updateSheetTabSelector();
+
+  // Show sheet selector and tab bar now that data is loaded
+  var sheetSel = document.getElementById('sheet-tab-selector');
+  var tabBar = document.getElementById('tab-bar');
+  if (sheetSel) sheetSel.style.display = '';
+  if (tabBar) tabBar.style.display = 'flex';
 
   // Only navigate to a view on first load — don't interrupt if user is mid-edit
   if (!state.editingAction && !state.editingSource && !state.editingScript) {
