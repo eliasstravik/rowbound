@@ -414,15 +414,13 @@ body {
 
 <div id="app">
   <div id="header">
-    <div id="header-title"><span>Rowbound</span></div>
+    <div id="header-title"><span>Rowbound</span><span class="spacer"></span><button class="btn-icon" onclick="refreshAll()" title="Refresh" id="refresh-btn" style="font-size:16px;padding:2px 6px;cursor:pointer">&#8635;</button></div>
   </div>
   <div id="sheet-tab-selector" style="padding:6px 16px 8px;display:none">
-    <div style="display:flex;gap:6px;align-items:center">
-      <select id="sheet-tab-select" class="field-select" style="flex:1;font-weight:500" onchange="onSheetTabSelect(this.value)">
-        <option value="">Loading...</option>
-      </select>
-      <button class="btn-icon" onclick="refreshAll()" title="Refresh" id="refresh-btn" style="font-size:16px;padding:4px 6px;border:1px solid #dadce0;border-radius:4px;background:#fff;cursor:pointer">&#8635;</button>
-    </div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">Sheet</div>
+    <select id="sheet-tab-select" class="field-select" style="width:100%;font-weight:500" onchange="onSheetTabSelect(this.value)">
+      <option value="">Loading...</option>
+    </select>
   </div>
   <div id="tab-bar" style="display:none">
     <button class="tab-btn active" onclick="switchTab('overview')" data-tab="overview">Actions</button>
@@ -776,8 +774,14 @@ function updateTabBar(activeTab) {
 /* ═══════════════════════════════════════════════════════════════════════════
    RENDER HEADER
    ═══════════════════════════════════════════════════════════════════════════ */
+function restoreDefaultHeader() {
+  var el = document.getElementById('header');
+  if (el) safeSetHTML(el, '<div id="header-title"><span>Rowbound</span><span class="spacer"></span><button class="btn-icon" onclick="refreshAll()" title="Refresh" id="refresh-btn" style="font-size:16px;padding:2px 6px;cursor:pointer">&#8635;</button></div>');
+}
+
 function renderHeader(title, opts) {
   opts = opts || {};
+  if (!title) { restoreDefaultHeader(); return; }
   var h = '<div id="header-title">';
   if (opts.back) {
     h += '<button class="btn-icon" onclick="' + esc(opts.back) + '" title="Back">&#8592;</button>';
@@ -847,7 +851,7 @@ function showOverview() {
   state.view = 'overview';
   state.lastListView = 'overview';
   updateTabBar('overview');
-  renderHeader('Sheet');
+  restoreDefaultHeader();
 
   var enabled = isTabEnabled();
   var actions = getActions();
@@ -898,8 +902,9 @@ function showOverview() {
 function showSources() {
   state.view = 'sources';
   state.lastListView = 'sources';
+  restoreDefaultHeader();
   updateTabBar('sources');
-  renderHeader('Sheet');
+  
 
   var sources = getSources();
   var h = '';
@@ -1337,7 +1342,7 @@ function showSettings() {
   state.view = 'settings';
   state.lastListView = 'settings';
   updateTabBar('settings');
-  renderHeader('Sheet');
+  restoreDefaultHeader();
   ensureConfig();
   // Per-tab settings override global
   var global = state.config.settings || {};
