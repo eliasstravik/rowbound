@@ -438,6 +438,12 @@ body {
       <option value="settings">Settings</option>
     </select>
   </div>
+  <div id="column-selector" style="display:none;padding:0 16px 8px;border-bottom:1px solid #dadce0;flex-shrink:0">
+    <div style="font-size:15px;color:#202124;font-weight:600;margin-bottom:6px">Column</div>
+    <select id="action-col-select" class="field-select" style="width:100%;font-weight:500" onchange="onActionColumnChange(this.value)">
+      <option value="">Select a column...</option>
+    </select>
+  </div>
   <div id="content">
     <div style="padding: 16px;">
       <div class="skeleton" style="height:32px;width:50%;margin-bottom:16px;border-radius:6px"></div>
@@ -764,10 +770,12 @@ function switchTab(tab) {
 function updateTabBar(activeTab) {
   var bar = document.getElementById('tab-bar');
   var sheetSel = document.getElementById('sheet-tab-selector');
+  var colSel = document.getElementById('column-selector');
   if (!bar) return;
   var showTabs = (activeTab === 'overview' || activeTab === 'sources' || activeTab === 'settings');
   bar.style.display = showTabs ? '' : 'none';
   if (sheetSel) sheetSel.style.display = showTabs ? '' : 'none';
+  if (colSel) colSel.style.display = activeTab === 'overview' ? '' : 'none';
   var viewSelect = document.getElementById('view-select');
   if (viewSelect && showTabs) viewSelect.value = activeTab;
 }
@@ -860,37 +868,34 @@ function showOverview() {
   var colMap = getColumnIdMap();
   var selectedCol = state.columnInfo ? state.columnInfo.column : '';
 
-  var h = '';
-
-  if (!enabled) {
-    h += '<div class="disabled-banner">Processing is paused. No actions will run until re-enabled in Settings.</div>';
-  }
-
-  // Column dropdown
-  h += '<div style="margin-bottom:12px">';
-  h += '<div style="font-size:15px;color:#202124;font-weight:600;margin-bottom:6px">Column</div>';
-  h += '<select class="field-select" style="width:100%" id="action-col-select" onchange="onActionColumnChange(this.value)">';
-  h += '<option value="">Select a column...</option>';
-
-  // Build action lookup for pill display
+  // Populate the fixed column selector
   var actionByColumn = {};
   for (var i = 0; i < actions.length; i++) {
     var colName = colMap[actions[i].target] || actions[i].target;
     actionByColumn[colName] = actions[i];
   }
 
-  for (var j = 0; j < headers.length; j++) {
-    var hdr = headers[j];
-    var action = actionByColumn[hdr];
-    var marker = action ? ' [' + displayType(action).toUpperCase() + ']' : '';
-    var sel = (hdr === selectedCol) ? ' selected' : '';
-    h += '<option value="' + esc(hdr) + '"' + sel + '>' + esc(hdr) + marker + '</option>';
+  var selectEl = document.getElementById('action-col-select');
+  if (selectEl) {
+    var opts = '<option value="">Select a column...</option>';
+    for (var j = 0; j < headers.length; j++) {
+      var hdr = headers[j];
+      var action = actionByColumn[hdr];
+      var marker = action ? ' [' + displayType(action).toUpperCase() + ']' : '';
+      var sel = (hdr === selectedCol) ? ' selected' : '';
+      opts += '<option value="' + esc(hdr) + '"' + sel + '>' + esc(hdr) + marker + '</option>';
+    }
+    selectEl.innerHTML = opts;
   }
-  h += '</select></div>';
+
+  var h = '';
+
+  if (!enabled) {
+    h += '<div class="disabled-banner">Processing is paused. No actions will run until re-enabled in Settings.</div>';
+  }
 
   // Show editor inline if a column is selected
   if (selectedCol && selectedCol !== '') {
-    h += '<hr style="border:none;border-top:1px solid #dadce0;margin:8px 0 16px">';
     var existingAction = actionByColumn[selectedCol];
     if (existingAction) {
       // Edit existing action inline
