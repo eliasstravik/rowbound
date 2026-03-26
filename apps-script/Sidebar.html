@@ -2911,23 +2911,23 @@ function applyInitData(data) {
   if (data.configVersion !== undefined) _knownConfigVersion = data.configVersion;
   ensureConfig();
   updateSheetTabSelector();
-  switch (data.initialView) {
-    case 'overview': showOverview(); break;
-    case 'sources': showSources(); break;
-    case 'settings': showSettings(); break;
-    default: showOverview(); break;
+
+  // Only navigate to a view on first load — don't interrupt if user is mid-edit
+  if (!state.editingAction && !state.editingSource && !state.editingScript) {
+    switch (data.initialView) {
+      case 'overview': showOverview(); break;
+      case 'sources': showSources(); break;
+      case 'settings': showSettings(); break;
+      default: showOverview(); break;
+    }
   }
 }
 
-function init() {
-  // Try to show from session cache instantly while fetching fresh data
-  try {
-    var cached = sessionStorage.getItem('rb_initData');
-    if (cached) {
-      applyInitData(JSON.parse(cached));
-    }
-  } catch (e) { /* sessionStorage may be unavailable in iframe */ }
+var _initDone = false;
 
+function init() {
+  // Show skeleton until fresh data arrives — don't render from stale cache
+  // because it causes the view to reset if the user navigates before data loads
   serverCall('getInitData', undefined, function(err, data) {
     if (err) {
       safeSetHTML(document.getElementById('content'),
@@ -2935,8 +2935,8 @@ function init() {
         '<p>' + esc(err.message || 'Unknown error') + '</p></div>');
       return;
     }
-    // Cache for instant load next time
     try { sessionStorage.setItem('rb_initData', JSON.stringify(data)); } catch (e) {}
+    _initDone = true;
     applyInitData(data);
   });
 }
