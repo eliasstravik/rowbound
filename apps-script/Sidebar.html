@@ -285,6 +285,15 @@ body {
 .badge-src-webhook { background: #e6f4ea; color: #188038; }
 .badge-src-script  { background: #e8eaf6; color: #3949ab; }
 
+/* Column list rows */
+.column-row {
+  display: flex; align-items: center; padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0; cursor: pointer;
+}
+.column-row:last-child { border-bottom: none; }
+.column-row:hover { background: #f8f9fa; margin: 0 -16px; padding: 10px 16px; }
+.column-row-name { flex: 1; font-size: 13px; color: #202124; }
+
 /* ═══════════════════════════════════════════════════════════════════════════
    OVERVIEW LIST
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -847,45 +856,60 @@ function showOverview() {
 
   var enabled = isTabEnabled();
   var actions = getActions();
+  var headers = (state.columnInfo && state.columnInfo.headers) || [];
+  var colMap = getColumnIdMap();
+
+  // Build action lookup: column name → action
+  var actionByColumn = {};
+  for (var i = 0; i < actions.length; i++) {
+    var colName = colMap[actions[i].target] || actions[i].target;
+    actionByColumn[colName] = actions[i];
+  }
+
   var h = '';
 
   if (!enabled) {
     h += '<div class="disabled-banner">Processing is paused. No actions will run until re-enabled in Settings.</div>';
   }
-  if (actions.length === 0) {
+
+  if (headers.length === 0 && actions.length === 0) {
     h += '<div class="empty-state">';
-    h += '<div class="empty-state-title">No actions configured</div>';
-    h += '<p>Select a column and add an action to get started.</p>';
+    h += '<div class="empty-state-title">No columns found</div>';
+    h += '<p>Add column headers to your sheet, then click Sync.</p>';
     h += '</div>';
   } else {
-    // Sort actions by their column position in the sheet (left to right)
-    var headers = (state.columnInfo && state.columnInfo.headers) || [];
-    var colMap = getColumnIdMap();
-    actions.sort(function(a, b) {
-      var nameA = colMap[a.target] || a.target;
-      var nameB = colMap[b.target] || b.target;
-      var posA = headers.indexOf(nameA);
-      var posB = headers.indexOf(nameB);
-      if (posA === -1) posA = 9999;
-      if (posB === -1) posB = 9999;
-      return posA - posB;
-    });
-    for (var i = 0; i < actions.length; i++) {
-      var a = actions[i];
-      h += '<div class="action-item" onclick="editActionByIndex(' + i + ')">';
-      h += '<div class="action-item-header">';
-      var dt = displayType(a);
-      h += '<span class="badge badge-' + esc(dt) + '">' + esc(dt === 'ai' ? 'AI' : dt) + '</span>';
-      h += '<span class="action-item-title">' + esc(resolveColumnName(a.target)) + '</span>';
-      h += '</div>';
+    // Show every column in sheet order
+    for (var j = 0; j < headers.length; j++) {
+      var hdr = headers[j];
+      var action = actionByColumn[hdr];
+      h += '<div class="column-row" onclick="onColumnClick(\'' + esc(hdr).replace(/'/g, "\\'") + '\')">';
+      h += '<span class="column-row-name">' + esc(hdr) + '</span>';
+      if (action) {
+        var dt = displayType(action);
+        h += '<span class="badge badge-' + esc(dt) + '">' + esc(dt === 'ai' ? 'AI' : dt) + '</span>';
+      }
       h += '</div>';
     }
   }
+
   safeSetHTML(document.getElementById('content'), h);
-  renderFooter([
-    'spacer',
-    { label: '+ New Action', cls: 'btn-primary', action: 'showCreate()' }
-  ]);
+  renderFooter([]);
+}
+
+/** Click a column row: edit existing action or create new one */
+function onColumnClick(columnName) {
+  var actions = getActions();
+  var colMap = getColumnIdMap();
+  for (var i = 0; i < actions.length; i++) {
+    var name = colMap[actions[i].target] || actions[i].target;
+    if (name === columnName) {
+      state.columnInfo.column = columnName;
+      showEditor(actions[i], columnName);
+      return;
+    }
+  }
+  // No action — create new
+  showCreateWithColumn(columnName);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
