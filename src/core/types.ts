@@ -161,6 +161,8 @@ export interface WriteAction {
 /** HTTP source: fetch from an API and create rows from the response */
 export interface HttpSource {
   id: string;
+  /** Human-readable display name (e.g. "HubSpot Contacts") */
+  name?: string;
   type: "http";
   method: string;
   url: string;
@@ -184,6 +186,8 @@ export interface HttpSource {
 /** Exec source: run a shell command and create rows from JSON output */
 export interface ExecSource {
   id: string;
+  /** Human-readable display name */
+  name?: string;
   type: "exec";
   command: string;
   /** JSONPath to extract the array from stdout (e.g. "$.results"). If omitted, stdout must be a JSON array. */
@@ -200,6 +204,8 @@ export interface ExecSource {
 /** Webhook source: accept inbound POST payloads and create rows */
 export interface WebhookSource {
   id: string;
+  /** Human-readable display name */
+  name?: string;
   type: "webhook";
   /** Column mappings: { "Header": "$.payload.field" } — JSONPath per payload */
   columns: Record<string, string>;
@@ -210,6 +216,8 @@ export interface WebhookSource {
 /** Script source: runs a named script and creates rows from JSON output */
 export interface ScriptSource {
   id: string;
+  /** Human-readable display name */
+  name?: string;
   type: "script";
   /** Name of a script defined in the scripts section */
   script: string;
@@ -296,6 +304,8 @@ export interface AiAction {
 
 /** Common optional fields shared across all action types */
 export interface ActionCommon {
+  /** Human-readable display name for the action (e.g. "Enrich Email") */
+  name?: string;
   /** Per-action environment variable overrides. Merged into the execution
    *  context env for this action only. Useful for API keys, browser config
    *  (e.g. PLAYWRIGHT_HEADLESS=true), feature flags, etc. */

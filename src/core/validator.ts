@@ -313,7 +313,8 @@ export function validateConfig(config: PipelineConfig): ValidationResult {
       if (!lookupAction.matchValue) {
         errors.push(`${label}: lookup action missing 'matchValue'`);
       }
-      if (!lookupAction.returnColumn) {
+      const effectiveReturnType = lookupAction.returnType ?? "value";
+      if (effectiveReturnType === "value" && !lookupAction.returnColumn) {
         errors.push(`${label}: lookup action missing 'returnColumn'`);
       }
       if (

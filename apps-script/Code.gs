@@ -20,28 +20,8 @@ function onOpen() {
 
 // ── Sidebar entry points ────────────────────────────────────────────────────
 
-function openColumnConfig() {
-  PropertiesService.getUserProperties().setProperty('rb_view', 'column');
-  openSidebar_();
-}
-
 function openOverview() {
   PropertiesService.getUserProperties().setProperty('rb_view', 'overview');
-  openSidebar_();
-}
-
-function openSources() {
-  PropertiesService.getUserProperties().setProperty('rb_view', 'sources');
-  openSidebar_();
-}
-
-function openScripts() {
-  PropertiesService.getUserProperties().setProperty('rb_view', 'scripts');
-  openSidebar_();
-}
-
-function openPipelineSettings() {
-  PropertiesService.getUserProperties().setProperty('rb_view', 'settings');
   openSidebar_();
 }
 
@@ -52,50 +32,65 @@ function openSidebar_() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
+function getCleanHeaders_(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol === 0) return [];
+  return sheet
+    .getRange(1, 1, 1, lastCol)
+    .getValues()[0]
+    .filter(function(h) { return h !== ''; })
+    .map(String);
+}
+
+function buildColumnInfo_(sheet, headers) {
+  var cell = SpreadsheetApp.getActiveRange();
+  var col = cell ? cell.getColumn() : 1;
+  var columnName = col <= headers.length ? String(headers[col - 1]) : '';
+  return {
+    column: columnName,
+    columnIndex: col,
+    tabName: sheet.getName(),
+    tabGid: String(sheet.getSheetId()),
+    headers: headers
+  };
+}
+
+function listSpreadsheetTabs_(ss) {
+  return ss.getSheets().map(function(s) {
+    return { name: s.getName(), gid: String(s.getSheetId()) };
+  });
+}
+
+function reconcileSheetColumns_(config, sheet, headers) {
+  if (!config || !config.tabs) return false;
+  return reconcileColumns_(config, String(sheet.getSheetId()), headers);
+}
+
 /**
  * Single init call — returns everything the sidebar needs in one round-trip.
  */
 function getInitData() {
   var props = PropertiesService.getUserProperties();
-  var view = props.getProperty('rb_view') || 'column';
+  var view = props.getProperty('rb_view') || 'overview';
   props.deleteProperty('rb_view');
 
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = SpreadsheetApp.getActiveSheet();
-  var cell = SpreadsheetApp.getActiveRange();
-  var col = cell.getColumn();
-  var lastCol = sheet.getLastColumn();
-  var headers = lastCol > 0
-    ? sheet.getRange(1, 1, 1, lastCol).getValues()[0]
-    : [];
-  var columnName = (col <= headers.length) ? String(headers[col - 1]) : '';
+  var headers = getCleanHeaders_(sheet);
 
   var configResult = loadConfigWithVersion_();
 
-  // Lightweight column reconcile: detect header renames and update config
-  if (configResult.config && configResult.config.tabs) {
-    var cleanHeaders = headers.filter(function(h) { return h !== ''; }).map(String);
-    var changed = reconcileColumns_(configResult.config, String(sheet.getSheetId()), cleanHeaders);
-    if (changed) {
-      saveConfig(configResult.config);
-      configResult.version = getConfigVersion_();
-    }
+  if (reconcileSheetColumns_(configResult.config, sheet, headers)) {
+    saveConfig(configResult.config);
+    configResult.version = getConfigVersion_();
   }
 
   return {
     initialView: view,
     config: configResult.config,
     configVersion: configResult.version,
-    columnInfo: {
-      column: columnName,
-      columnIndex: col,
-      tabName: sheet.getName(),
-      tabGid: String(sheet.getSheetId()),
-      headers: headers.filter(function(h) { return h !== ''; }).map(String)
-    },
-    tabs: ss.getSheets().map(function(s) {
-      return { name: s.getName(), gid: String(s.getSheetId()) };
-    })
+    columnInfo: buildColumnInfo_(sheet, headers),
+    tabs: listSpreadsheetTabs_(ss)
   };
 }
 
@@ -107,9 +102,7 @@ function getInitData() {
 function pollState() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var version = getConfigVersion_();
-  var tabs = ss.getSheets().map(function(s) {
-    return { name: s.getName(), gid: String(s.getSheetId()) };
-  });
+  var tabs = listSpreadsheetTabs_(ss);
   return { configVersion: version, tabs: tabs };
 }
 
@@ -121,23 +114,26 @@ function loadConfigFull() {
   return result;
 }
 
-/** Returns column headers for a given tab. Also reconciles column names. */
+/** Returns column headers and the reconciled column ID map for a given tab. */
 function getTabHeaders(tabName) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(tabName);
-  if (!sheet || sheet.getLastColumn() === 0) return [];
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var cleanHeaders = headers.filter(function(h) { return h !== ''; }).map(String);
-
-  // Reconcile column renames while we have fresh headers
-  var config = loadConfig();
-  if (config && config.tabs) {
-    var gid = String(sheet.getSheetId());
-    if (reconcileColumns_(config, gid, cleanHeaders)) {
-      saveConfig(config);
-    }
+  if (!sheet || sheet.getLastColumn() === 0) {
+    return { headers: [], columns: {} };
   }
+  var headers = getCleanHeaders_(sheet);
 
-  return cleanHeaders;
+  var config = loadConfig();
+  if (reconcileSheetColumns_(config, sheet, headers)) {
+    saveConfig(config);
+  }
+  var gid = String(sheet.getSheetId());
+
+  var columns =
+    config && config.tabs && config.tabs[gid] && config.tabs[gid].columns
+      ? config.tabs[gid].columns
+      : {};
+
+  return { headers: headers, columns: columns };
 }
 
 // ── Lightweight column reconcile ─────────────────────────────────────────────
@@ -263,7 +259,7 @@ function loadConfigWithVersion_() {
  *  Cache hit is ~10ms vs ~1-3s for the Developer Metadata REST call. */
 function loadConfig() {
   var ssId = SpreadsheetApp.getActiveSpreadsheet().getId();
-  var cacheKey = 'rb_config_' + ssId;
+  var cacheKey = getConfigCacheKey_(ssId);
   var cache = CacheService.getUserCache();
 
   // Try cache first (5-minute TTL, invalidated by saveConfig)
@@ -275,22 +271,57 @@ function loadConfig() {
   return loadConfigFromApi_(ssId, cache, cacheKey);
 }
 
+function getConfigCacheKey_(ssId) {
+  return 'rb_config_' + ssId;
+}
+
+function getConfigMetadataIdKey_(ssId) {
+  return 'rb_config_metadata_id_' + ssId;
+}
+
+function getCachedConfigMetadataId_(ssId) {
+  return PropertiesService.getDocumentProperties().getProperty(getConfigMetadataIdKey_(ssId));
+}
+
+function setCachedConfigMetadataId_(ssId, metadataId) {
+  if (metadataId === null || metadataId === undefined || metadataId === '') return;
+  PropertiesService.getDocumentProperties().setProperty(
+    getConfigMetadataIdKey_(ssId),
+    String(metadataId)
+  );
+}
+
+function clearCachedConfigMetadataId_(ssId) {
+  PropertiesService.getDocumentProperties().deleteProperty(getConfigMetadataIdKey_(ssId));
+}
+
+function searchConfigMetadata_(ssId) {
+  var result = Sheets.Spreadsheets.DeveloperMetadata.search({
+    dataFilters: [{
+      developerMetadataLookup: { metadataKey: 'rowbound_config' }
+    }]
+  }, ssId);
+
+  if (!result.matchedDeveloperMetadata || result.matchedDeveloperMetadata.length === 0) {
+    return null;
+  }
+
+  return result.matchedDeveloperMetadata[0].developerMetadata || null;
+}
+
 /** Internal: fetch config from the Sheets Developer Metadata API and update cache. */
 function loadConfigFromApi_(ssId, cache, cacheKey) {
   try {
-    var result = Sheets.Spreadsheets.DeveloperMetadata.search({
-      dataFilters: [{
-        developerMetadataLookup: { metadataKey: 'rowbound_config' }
-      }]
-    }, ssId);
-
-    if (!result.matchedDeveloperMetadata ||
-        result.matchedDeveloperMetadata.length === 0) {
+    var metadata = searchConfigMetadata_(ssId);
+    if (!metadata) {
+      clearCachedConfigMetadataId_(ssId);
       return null;
     }
-    var configStr = result.matchedDeveloperMetadata[0].developerMetadata.metadataValue;
+
+    var configStr = metadata.metadataValue;
     // Cache for 5 minutes (300 seconds)
     cache.put(cacheKey, configStr, 300);
+    setCachedConfigMetadataId_(ssId, metadata.metadataId);
     return JSON.parse(configStr);
   } catch (e) {
     Logger.log('loadConfig error: ' + e.message);
@@ -301,56 +332,95 @@ function loadConfigFromApi_(ssId, cache, cacheKey) {
 /** Writes the rowbound_config to Developer Metadata (create or update). */
 function saveConfig(configJson) {
   var ssId = SpreadsheetApp.getActiveSpreadsheet().getId();
+  var cacheKey = getConfigCacheKey_(ssId);
+  var cache = CacheService.getUserCache();
   var configStr = (typeof configJson === 'string')
     ? configJson
     : JSON.stringify(configJson);
+  var saved = false;
+  var metadataId = getCachedConfigMetadataId_(ssId);
 
-  // Look for existing metadata
-  var existingId = null;
-  try {
-    var result = Sheets.Spreadsheets.DeveloperMetadata.search({
-      dataFilters: [{
-        developerMetadataLookup: { metadataKey: 'rowbound_config' }
-      }]
-    }, ssId);
-    if (result.matchedDeveloperMetadata &&
-        result.matchedDeveloperMetadata.length > 0) {
-      existingId = result.matchedDeveloperMetadata[0]
-        .developerMetadata.metadataId;
-    }
-  } catch (e) { /* no existing config */ }
-
-  // Invalidate cache and bump version
-  var cacheKey = 'rb_config_' + ssId;
-  CacheService.getUserCache().remove(cacheKey);
-  incrementConfigVersion_();
-
-  if (existingId !== null) {
-    Sheets.Spreadsheets.batchUpdate({
-      requests: [{
-        updateDeveloperMetadata: {
-          dataFilters: [{
-            developerMetadataLookup: { metadataId: existingId }
-          }],
-          developerMetadata: { metadataValue: configStr },
-          fields: 'metadataValue'
-        }
-      }]
-    }, ssId);
-  } else {
-    Sheets.Spreadsheets.batchUpdate({
-      requests: [{
-        createDeveloperMetadata: {
-          developerMetadata: {
-            metadataKey: 'rowbound_config',
-            metadataValue: configStr,
-            location: { spreadsheet: true },
-            visibility: 'DOCUMENT'
-          }
-        }
-      }]
-    }, ssId);
+  if (metadataId) {
+    saved = updateConfigMetadata_(ssId, metadataId, configStr);
+    if (!saved) metadataId = null;
   }
 
-  return { success: true };
+  if (!saved) {
+    try {
+      var metadata = searchConfigMetadata_(ssId);
+      if (metadata && metadata.metadataId) {
+        metadataId = String(metadata.metadataId);
+        setCachedConfigMetadataId_(ssId, metadataId);
+        saved = updateConfigMetadata_(ssId, metadataId, configStr);
+      }
+    } catch (e) {
+      Logger.log('saveConfig search error: ' + e.message);
+    }
+  }
+
+  if (!saved) {
+    metadataId = createConfigMetadata_(ssId, configStr);
+  }
+
+  cache.put(cacheKey, configStr, 300);
+  var version = incrementConfigVersion_();
+  return { success: true, version: version };
+}
+
+function updateConfigMetadata_(ssId, metadataId, configStr) {
+  try {
+    updateConfigMetadataOrThrow_(ssId, metadataId, configStr);
+    return true;
+  } catch (e) {
+    Logger.log('saveConfig update error: ' + e.message);
+    clearCachedConfigMetadataId_(ssId);
+    return false;
+  }
+}
+
+function updateConfigMetadataOrThrow_(ssId, metadataId, configStr) {
+  Sheets.Spreadsheets.batchUpdate({
+    requests: [{
+      updateDeveloperMetadata: {
+        dataFilters: [{
+          developerMetadataLookup: { metadataId: metadataId }
+        }],
+        developerMetadata: { metadataValue: configStr },
+        fields: 'metadataValue'
+      }
+    }]
+  }, ssId);
+  setCachedConfigMetadataId_(ssId, metadataId);
+}
+
+function createConfigMetadata_(ssId, configStr) {
+  var response = Sheets.Spreadsheets.batchUpdate({
+    requests: [{
+      createDeveloperMetadata: {
+        developerMetadata: {
+          metadataKey: 'rowbound_config',
+          metadataValue: configStr,
+          location: { spreadsheet: true },
+          visibility: 'DOCUMENT'
+        }
+      }
+    }]
+  }, ssId);
+
+  var metadataId =
+    response &&
+    response.replies &&
+    response.replies[0] &&
+    response.replies[0].createDeveloperMetadata &&
+    response.replies[0].createDeveloperMetadata.developerMetadata
+      ? response.replies[0].createDeveloperMetadata.developerMetadata.metadataId
+      : null;
+
+  if (metadataId !== null && metadataId !== undefined) {
+    setCachedConfigMetadataId_(ssId, metadataId);
+    return String(metadataId);
+  }
+
+  clearCachedConfigMetadataId_(ssId);
+  return null;
 }

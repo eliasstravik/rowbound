@@ -42,23 +42,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-#header-nav {
-  margin-top: 8px;
-  padding: 0 16px 8px;
-}
-.header-nav-label {
-  font-size: 12px;
-  color: #5f6368;
-  white-space: nowrap;
-}
-#header-nav select {
-  flex: 1;
-  padding: 6px 8px;
-  border: 1px solid #dadce0;
-  border-radius: 4px;
-  font-size: 13px;
-  background: #fff;
+  padding: 0 16px;
 }
 #content {
   padding: 16px;
@@ -396,9 +380,14 @@ body {
   display: block;
   background: #fff;
 }
+.tab-bar-inner {
+  display: flex;
+  gap: 16px;
+  border-bottom: 1px solid #e8eaed;
+}
 .tab-btn {
   flex: 1;
-  padding: 10px 4px 8px;
+  padding: 10px 2px 8px;
   border: none;
   background: transparent;
   font-size: 12px;
@@ -424,25 +413,18 @@ body {
     <div id="sheet-tab-selector" style="padding:10px 16px;display:none">
       <div style="display:flex;align-items:center;margin-bottom:6px">
         <span style="font-size:15px;color:#202124;font-weight:600;flex:1">Sheet</span>
-        <button onclick="refreshAll()" title="Refresh" id="refresh-btn" style="font-size:14px;padding:4px 10px;cursor:pointer;color:#5f6368;background:#fff;border:1px solid #dadce0;border-radius:4px">&#8635; Sync</button>
+        <button onclick="syncNow()" title="Refresh" id="refresh-btn" style="font-size:14px;padding:4px 10px;cursor:pointer;color:#5f6368;background:#fff;border:1px solid #dadce0;border-radius:4px">&#8635; Sync</button>
       </div>
       <select id="sheet-tab-select" class="field-select" style="width:100%;font-weight:500" onchange="onSheetTabSelect(this.value)">
         <option value="">Loading...</option>
       </select>
     </div>
     <div id="tab-bar" style="display:none;padding:0 16px 8px">
-      <div style="font-size:15px;color:#202124;font-weight:600;margin-bottom:6px">View</div>
-      <select id="view-select" class="field-select" style="width:100%;font-weight:500" onchange="switchTab(this.value)">
-        <option value="overview">Actions</option>
-        <option value="sources">Sources</option>
-        <option value="settings">Settings</option>
-      </select>
-    </div>
-    <div id="column-selector" style="display:none;padding:0 16px 8px">
-      <div style="font-size:15px;color:#202124;font-weight:600;margin-bottom:6px">Column</div>
-      <select id="action-col-select" class="field-select" style="width:100%;font-weight:500" onchange="onActionColumnChange(this.value)">
-        <option value="">Select a column...</option>
-      </select>
+      <div class="tab-bar-inner">
+        <button type="button" id="tab-btn-overview" class="tab-btn" onclick="switchTab('overview')">Actions</button>
+        <button type="button" id="tab-btn-sources" class="tab-btn" onclick="switchTab('sources')">Sources</button>
+        <button type="button" id="tab-btn-settings" class="tab-btn" onclick="switchTab('settings')">Settings</button>
+      </div>
     </div>
     <div id="content">
       <div style="padding: 16px;">
@@ -463,6 +445,7 @@ body {
    ═══════════════════════════════════════════════════════════════════════════ */
 var state = {
   config: null,
+  configVersion: 0,
   columnInfo: null,
   tabs: [],
   view: 'loading',
@@ -508,6 +491,38 @@ function getTabConfig() {
   return null;
 }
 
+function ensureCurrentTabConfig() {
+  ensureConfig();
+  if (!state.config || !state.columnInfo) return null;
+  var c = state.config;
+  if (!c.tabs) c.tabs = {};
+  var gid = state.columnInfo.tabGid;
+  if (!c.tabs[gid]) {
+    c.tabs[gid] = {
+      name: state.columnInfo.tabName,
+      columns: {},
+      actions: [],
+      sources: [],
+      scripts: {}
+    };
+  }
+  if (!c.tabs[gid].columns) c.tabs[gid].columns = {};
+  if (!c.tabs[gid].actions) c.tabs[gid].actions = [];
+  if (!c.tabs[gid].sources) c.tabs[gid].sources = [];
+  if (!c.tabs[gid].scripts) c.tabs[gid].scripts = {};
+  return c.tabs[gid];
+}
+
+function applyTabHeadersData(result, tabName) {
+  if (!state.columnInfo || (tabName && state.columnInfo.tabName !== tabName)) return;
+  var data = Array.isArray(result) ? { headers: result, columns: null } : (result || {});
+  state.columnInfo.headers = data.headers || [];
+  if (data.columns) {
+    var tc = ensureCurrentTabConfig();
+    if (tc) tc.columns = data.columns;
+  }
+}
+
 function getActions() {
   if (!state.config) return [];
   var tc = getTabConfig();
@@ -515,15 +530,31 @@ function getActions() {
   return state.config.actions || [];
 }
 
+function getSortedActions(actions) {
+  var list = (actions || getActions()).slice();
+  var headers = (state.columnInfo && state.columnInfo.headers) || [];
+  var order = {};
+  for (var i = 0; i < headers.length; i++) {
+    order[headers[i]] = i;
+  }
+
+  list.sort(function(a, b) {
+    var aName = resolveColumnName(a.target);
+    var bName = resolveColumnName(b.target);
+    var aIndex = Object.prototype.hasOwnProperty.call(order, aName) ? order[aName] : Number.MAX_SAFE_INTEGER;
+    var bIndex = Object.prototype.hasOwnProperty.call(order, bName) ? order[bName] : Number.MAX_SAFE_INTEGER;
+    if (aIndex !== bIndex) return aIndex - bIndex;
+    return aName.localeCompare(bName) || String(a.id || '').localeCompare(String(b.id || ''));
+  });
+
+  return list;
+}
+
 function setActions(actions) {
   if (!state.config) return;
   var c = state.config;
   if (c.tabs && state.columnInfo) {
-    var gid = state.columnInfo.tabGid;
-    if (!c.tabs[gid]) {
-      c.tabs[gid] = { name: state.columnInfo.tabName, columns: {}, actions: [] };
-    }
-    c.tabs[gid].actions = actions;
+    ensureCurrentTabConfig().actions = actions;
   } else {
     c.actions = actions;
   }
@@ -540,11 +571,7 @@ function setSources(sources) {
   if (!state.config) return;
   var c = state.config;
   if (c.tabs && state.columnInfo) {
-    var gid = state.columnInfo.tabGid;
-    if (!c.tabs[gid]) {
-      c.tabs[gid] = { name: state.columnInfo.tabName, columns: {}, actions: [], sources: [] };
-    }
-    c.tabs[gid].sources = sources;
+    ensureCurrentTabConfig().sources = sources;
   } else {
     c.sources = sources;
   }
@@ -561,11 +588,7 @@ function setScripts(scripts) {
   if (!state.config) return;
   var c = state.config;
   if (c.tabs && state.columnInfo) {
-    var gid = state.columnInfo.tabGid;
-    if (!c.tabs[gid]) {
-      c.tabs[gid] = { name: state.columnInfo.tabName, columns: {}, actions: [], sources: [], scripts: {} };
-    }
-    c.tabs[gid].scripts = scripts;
+    ensureCurrentTabConfig().scripts = scripts;
   } else {
     c.scripts = scripts;
   }
@@ -583,6 +606,41 @@ function buildScriptSelect(name, current) {
   for (var i = 0; i < names.length; i++) {
     h += '<option value="' + esc(names[i]) + '"' + (names[i] === current ? ' selected' : '') + '>' +
          esc(names[i]) + '</option>';
+  }
+  return h + '</select>';
+}
+
+function getAvailableActionColumns(currentTarget, currentActionId) {
+  var headers = (state.columnInfo && state.columnInfo.headers) || [];
+  var currentColumn = currentTarget ? resolveColumnName(currentTarget) : '';
+  var used = {};
+  var actions = getActions();
+  for (var i = 0; i < actions.length; i++) {
+    if (currentActionId && actions[i].id === currentActionId) continue;
+    used[resolveColumnName(actions[i].target)] = true;
+  }
+  var available = [];
+  for (var j = 0; j < headers.length; j++) {
+    var header = headers[j];
+    if (!used[header] || header === currentColumn) {
+      available.push(header);
+    }
+  }
+  if (currentColumn && available.indexOf(currentColumn) === -1) {
+    available.unshift(currentColumn);
+  }
+  return available;
+}
+
+function buildActionTargetSelect(currentTarget) {
+  var currentActionId = state.originalAction ? state.originalAction.id : '';
+  var currentColumn = currentTarget ? resolveColumnName(currentTarget) : '';
+  var available = getAvailableActionColumns(currentColumn, currentActionId);
+  var h = '<select class="field-select" name="action_target">';
+  h += '<option value="">-- Select column --</option>';
+  for (var i = 0; i < available.length; i++) {
+    h += '<option value="' + esc(available[i]) + '"' + (available[i] === currentColumn ? ' selected' : '') + '>' +
+         esc(available[i]) + '</option>';
   }
   return h + '</select>';
 }
@@ -635,16 +693,6 @@ function readArgsList(name) {
   return result;
 }
 
-function sourceSummary(s) {
-  switch (s.type) {
-    case 'http': return (s.method || 'GET') + ' ' + (s.url || '');
-    case 'exec': return s.command ? s.command.substring(0, 60) : '';
-    case 'webhook': return Object.keys(s.columns || {}).length + ' columns mapped';
-    case 'script': return s.script || '';
-    default: return '';
-  }
-}
-
 /** Resolve a range ID to a human-readable column header name. */
 function resolveColumnName(target) {
   var tc = getTabConfig();
@@ -654,24 +702,20 @@ function resolveColumnName(target) {
 
 /** Given a header name, find its range ID (if any). */
 function resolveColumnId(headerName) {
-  var tc = getTabConfig();
-  if (tc && tc.columns) {
-    var keys = Object.keys(tc.columns);
-    for (var i = 0; i < keys.length; i++) {
-      if (tc.columns[keys[i]] === headerName) return keys[i];
-    }
+  if (!headerName) return '';
+  var tc = ensureCurrentTabConfig();
+  if (!tc) return '';
+  if (tc.columns[headerName]) return headerName;
+  var keys = Object.keys(tc.columns);
+  for (var i = 0; i < keys.length; i++) {
+    if (tc.columns[keys[i]] === headerName) return keys[i];
   }
-  return headerName;
-}
-
-function findActionByTarget(col) {
-  var actions = getActions();
-  var colId = resolveColumnId(col);
-  for (var i = 0; i < actions.length; i++) {
-    var t = actions[i].target;
-    if (t === col || t === colId || resolveColumnName(t) === col) return actions[i];
+  var id = generateId();
+  while (tc.columns[id]) {
+    id = generateId();
   }
-  return null;
+  tc.columns[id] = headerName;
+  return id;
 }
 
 function generateId() {
@@ -683,36 +727,44 @@ function generateId() {
 
 function deepCopy(obj) { return JSON.parse(JSON.stringify(obj)); }
 
+function getTypeLabel(type) {
+  var labels = {
+    http: 'HTTP',
+    ai: 'AI',
+    exec: 'Exec',
+    webhook: 'Webhook',
+    script: 'Script',
+    formula: 'Formula',
+    waterfall: 'Waterfall',
+    lookup: 'Lookup',
+    write: 'Write'
+  };
+  return labels[type] || (type ? type.charAt(0).toUpperCase() + type.slice(1) : '');
+}
+
+function getScriptRuntimeLabel(runtime) {
+  var labels = {
+    bash: 'Bash',
+    python3: 'Python 3',
+    node: 'Node.js'
+  };
+  return labels[runtime] || runtime || '';
+}
+
+function getOutputFieldTypeLabel(type) {
+  var labels = {
+    text: 'Text',
+    number: 'Number',
+    checkbox: 'Checkbox'
+  };
+  return labels[type] || (type ? type.charAt(0).toUpperCase() + type.slice(1) : '');
+}
+
 /** Return display type for badge — detects AI actions stored as exec or ai type. */
 function displayType(a) {
   if (a.type === 'ai') return 'ai';
   if (a.type === 'exec' && a.command && (a.command.indexOf('claude -p') >= 0 || a.command.indexOf('codex exec') >= 0)) return 'ai';
   return a.type;
-}
-
-function actionSummary(a) {
-  switch (a.type) {
-    case 'http': return (a.method || 'GET') + ' ' + resolveIds(a.url || '');
-    case 'waterfall': return (a.providers ? a.providers.length : 0) + ' providers';
-    case 'formula': return resolveIds(a.expression || '');
-    case 'exec': return a.command || '';
-    case 'lookup': return (a.sourceTab || '?') + ' \u2192 ' + (a.returnType || 'value');
-    case 'write': return (a.mode || 'append') + ' \u2192 ' + (a.destTab || '?');
-    case 'script': return a.script || '';
-    default: return '';
-  }
-}
-
-/** Replace row['rangeId'] references in when/url strings with human-readable names. */
-function humanizeExpression(expr) {
-  if (!expr) return '';
-  return expr.replace(/row\['([a-f0-9]+)'\]/g, function(match, id) {
-    var name = resolveColumnName(id);
-    return name !== id ? "row['" + name + "']" : match;
-  }).replace(/row\["([a-f0-9]+)"\]/g, function(match, id) {
-    var name = resolveColumnName(id);
-    return name !== id ? 'row["' + name + '"]' : match;
-  });
 }
 
 function showToast(msg, type) {
@@ -752,11 +804,58 @@ function ensureConfig() {
 /* ═══════════════════════════════════════════════════════════════════════════
    SERVER API
    ═══════════════════════════════════════════════════════════════════════════ */
-function serverCall(fn, arg, cb) {
-  var runner = google.script.run
-    .withSuccessHandler(function(r) { if (cb) cb(null, r); })
-    .withFailureHandler(function(e) { if (cb) cb(e); });
-  if (arg !== undefined) runner[fn](arg); else runner[fn]();
+function serverCallAsync(fn, arg) {
+  return new Promise(function(resolve, reject) {
+    var runner = google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject);
+    if (arg !== undefined) runner[fn](arg); else runner[fn]();
+  });
+}
+
+function closeConfirmDialog() {
+  var overlay = document.querySelector('.confirm-overlay');
+  if (overlay) overlay.remove();
+}
+
+function showConfirmDialog(titleText, messageText, onConfirm) {
+  closeConfirmDialog();
+
+  var overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+
+  var dialog = document.createElement('div');
+  dialog.className = 'confirm-dialog';
+
+  var title = document.createElement('h3');
+  title.textContent = titleText;
+
+  var msg = document.createElement('p');
+  msg.textContent = messageText;
+
+  var btns = document.createElement('div');
+  btns.className = 'confirm-dialog-btns';
+
+  var cancelBtn = document.createElement('button');
+  cancelBtn.className = 'btn btn-secondary';
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.onclick = closeConfirmDialog;
+
+  var confirmBtn = document.createElement('button');
+  confirmBtn.className = 'btn btn-danger';
+  confirmBtn.textContent = 'Delete';
+  confirmBtn.onclick = function() {
+    closeConfirmDialog();
+    if (onConfirm) onConfirm();
+  };
+
+  btns.appendChild(cancelBtn);
+  btns.appendChild(confirmBtn);
+  dialog.appendChild(title);
+  dialog.appendChild(msg);
+  dialog.appendChild(btns);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -771,14 +870,18 @@ function switchTab(tab) {
 function updateTabBar(activeTab) {
   var bar = document.getElementById('tab-bar');
   var sheetSel = document.getElementById('sheet-tab-selector');
-  var colSel = document.getElementById('column-selector');
   if (!bar) return;
   var showTabs = (activeTab === 'overview' || activeTab === 'sources' || activeTab === 'settings');
   bar.style.display = showTabs ? '' : 'none';
   if (sheetSel) sheetSel.style.display = showTabs ? '' : 'none';
-  if (colSel) colSel.style.display = activeTab === 'overview' ? '' : 'none';
-  var viewSelect = document.getElementById('view-select');
-  if (viewSelect && showTabs) viewSelect.value = activeTab;
+  var tabs = ['overview', 'sources', 'settings'];
+  for (var i = 0; i < tabs.length; i++) {
+    var btn = document.getElementById('tab-btn-' + tabs[i]);
+    if (btn) {
+      if (showTabs && tabs[i] === activeTab) btn.classList.add('active');
+      else btn.classList.remove('active');
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -802,20 +905,6 @@ function renderHeader(title, opts) {
     h += '<button class="btn-icon" onclick="showSettings()" title="Settings">&#9881;</button>';
   }
   h += '</div>';
-
-  if (opts.columnSelect && state.columnInfo) {
-    var actions = getActions();
-    var configured = {};
-    for (var i = 0; i < actions.length; i++) configured[actions[i].target] = true;
-    h += '<div id="header-nav"><span class="field-label">Column</span><select class="field-select" style="width:100%" onchange="switchColumn(this.value)">';
-    var headers = state.columnInfo.headers || [];
-    for (var j = 0; j < headers.length; j++) {
-      var hdr = headers[j];
-      var sel = (hdr === state.columnInfo.column) ? ' selected' : '';
-      h += '<option value="' + esc(hdr) + '"' + sel + '>' + esc(hdr) + '</option>';
-    }
-    h += '</select></div>';
-  }
 
   safeSetHTML(document.getElementById('header'), h);
 }
@@ -860,108 +949,47 @@ function getTabSettings() {
 function showOverview() {
   state.view = 'overview';
   state.lastListView = 'overview';
+  state.editingAction = null;
+  state.originalAction = null;
   updateTabBar('overview');
   restoreDefaultHeader();
 
   var enabled = isTabEnabled();
-  var actions = getActions();
-  var headers = (state.columnInfo && state.columnInfo.headers) || [];
-  var colMap = getColumnIdMap();
-  var selectedCol = state.columnInfo ? state.columnInfo.column : '';
-
-  // Populate the fixed column selector
-  var actionByColumn = {};
-  for (var i = 0; i < actions.length; i++) {
-    var colName = colMap[actions[i].target] || actions[i].target;
-    actionByColumn[colName] = actions[i];
-  }
-
-  var selectEl = document.getElementById('action-col-select');
-  if (selectEl) {
-    var opts = '<option value="">Select a column...</option>';
-    for (var j = 0; j < headers.length; j++) {
-      var hdr = headers[j];
-      var action = actionByColumn[hdr];
-      var marker = action ? ' [' + displayType(action).toUpperCase() + ']' : '';
-      var sel = (hdr === selectedCol) ? ' selected' : '';
-      opts += '<option value="' + esc(hdr) + '"' + sel + '>' + esc(hdr) + marker + '</option>';
-    }
-    selectEl.innerHTML = opts;
-  }
-
+  var actions = getSortedActions();
   var h = '';
 
   if (!enabled) {
     h += '<div class="disabled-banner">Processing is paused. No actions will run until re-enabled in Settings.</div>';
   }
 
-  // Show editor inline if a column is selected
-  if (selectedCol && selectedCol !== '') {
-    var existingAction = actionByColumn[selectedCol];
-    if (existingAction) {
-      // Edit existing action inline
-      var a = deepCopy(existingAction);
-      if (a.type === 'exec' && (a._ai_runtime || (a.command && (a.command.indexOf('claude -p') >= 0 || a.command.indexOf('codex exec') >= 0)))) {
-        a.type = 'ai';
-      }
-      state.editingAction = resolveActionForDisplay(a);
-      state.originalAction = deepCopy(existingAction);
-      h += buildInlineEditor(true);
-    } else {
-      // Create new action inline
-      var newAction = { id: generateId(), type: 'http', target: selectedCol, method: 'GET', url: '', extract: '' };
-      state.editingAction = newAction;
-      state.originalAction = null;
-      h += buildInlineEditor(false);
+  if (actions.length === 0) {
+    h += '<div class="empty-state">';
+    h += '<div class="empty-state-title">No actions configured</div>';
+    h += '<p>Actions enrich a single column using HTTP, AI, formulas, scripts, and more.</p>';
+    h += '</div>';
+  } else {
+    for (var i = 0; i < actions.length; i++) {
+      var action = actions[i];
+      var actionType = displayType(action);
+      h += '<div class="action-item" onclick="editActionByIndex(' + i + ')">';
+      h += '<div class="action-item-header">';
+      h += '<span class="badge badge-' + esc(actionType) + '">' + esc(getTypeLabel(actionType)) + '</span>';
+      h += '<span class="action-item-title">' + esc(resolveColumnName(action.target)) + '</span>';
+      h += '</div>';
+      h += '</div>';
     }
   }
 
   safeSetHTML(document.getElementById('content'), h);
-
-  if (selectedCol && selectedCol !== '') {
-    renderFooter([
-      state.originalAction ? { label: 'Delete', cls: 'btn-danger', action: 'confirmDelete()' } : null,
-      'spacer',
-      { label: state.originalAction ? 'Save' : 'Create', cls: 'btn-primary', action: 'saveAction()' }
-    ].filter(Boolean));
-  } else {
-    renderFooter([]);
-  }
-}
-
-function buildInlineEditor(isEdit) {
-  var a = state.editingAction;
-  var h = '';
-
-  h += '<div class="section"><div class="section-title">Action</div>';
-  h += field('Type', buildTypeSelect(a.type));
-  h += '</div>';
-
-  h += buildTypeFields(a);
-
-  h += '<div class="section"><div class="section-title">Environment Variables</div>';
-  h += '<p class="field-hint" style="margin-bottom:8px">Per-action env var overrides.</p>';
-  h += buildKvList('actionEnv', a.env || {}, 'e.g. API_KEY', 'e.g. sk-abc123');
-  h += '</div>';
-
-  h += '<div class="section"><div class="section-title">Run Conditions</div>';
-  h += field('Only run if', '<textarea class="field-textarea" name="when" placeholder="e.g. {{domain}} !== &#39;&#39;">' + esc(a.when || '') + '</textarea>',
-    'JavaScript expression. Use {{column}} for cell values.');
-  h += '</div>';
-
-  return h;
-}
-
-function onActionColumnChange(col) {
-  if (state.columnInfo) state.columnInfo.column = col;
-  showOverview();
+  renderFooter([
+    'spacer',
+    { label: 'New Action', cls: 'btn-primary', action: 'showCreateAction()' }
+  ]);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    VIEW: SOURCES
    ═══════════════════════════════════════════════════════════════════════════ */
-var _selectedSourceId = '';
-
 function showSources() {
   state.view = 'sources';
   state.lastListView = 'sources';
@@ -976,84 +1004,29 @@ function showSources() {
     h += '<div class="disabled-banner">Processing is paused. No sources will run until re-enabled in Settings.</div>';
   }
 
-  // Source dropdown
-  h += '<div style="margin-bottom:12px">';
-  h += '<div style="font-size:15px;color:#202124;font-weight:600;margin-bottom:6px">Source</div>';
-  h += '<select class="field-select" style="width:100%" id="source-select" onchange="onSourceSelect(this.value)">';
-  h += '<option value="">Select a source...</option>';
-  for (var i = 0; i < sources.length; i++) {
-    var s = sources[i];
-    var sdt = displayType(s);
-    var label = s.id + ' [' + (sdt === 'ai' ? 'AI' : sdt.toUpperCase()) + ']';
-    var sel = (s.id === _selectedSourceId) ? ' selected' : '';
-    h += '<option value="' + esc(s.id) + '"' + sel + '>' + esc(label) + '</option>';
-  }
-  h += '<option value="__new__">+ New source</option>';
-  h += '</select></div>';
-
-  // Inline editor if a source is selected
-  var showEditor = false;
-  if (_selectedSourceId === '__new__') {
-    var newSource = { id: generateId(), type: 'http', method: 'POST', url: '', extract: '$', columns: {}, schedule: 'manual' };
-    state.editingSource = newSource;
-    state.originalSource = null;
-    showEditor = true;
-  } else if (_selectedSourceId) {
-    var found = null;
-    for (var j = 0; j < sources.length; j++) {
-      if (sources[j].id === _selectedSourceId) { found = sources[j]; break; }
-    }
-    if (found) {
-      state.editingSource = deepCopy(found);
-      if (state.editingSource.type === 'exec' && state.editingSource._ai_runtime) {
-        state.editingSource.type = 'ai';
-      }
-      state.originalSource = deepCopy(found);
-      showEditor = true;
-    }
-  }
-
-  if (showEditor) {
-    // renderSourceEditorContent writes to #content — so we call it first,
-    // then prepend our dropdown HTML
-    renderSourceEditorContent();
-    var contentEl = document.getElementById('content');
-    if (contentEl) {
-      var wrapper = document.createElement('div');
-      safeSetHTML(wrapper, h);
-      contentEl.insertBefore(wrapper, contentEl.firstChild);
-    }
+  if (sources.length === 0) {
+    h += '<div class="empty-state">';
+    h += '<div class="empty-state-title">No sources configured</div>';
+    h += '<p>Sources create rows from external data — APIs, commands, or webhooks.</p>';
+    h += '</div>';
   } else {
-    safeSetHTML(document.getElementById('content'), h);
+    for (var i = 0; i < sources.length; i++) {
+      var s = sources[i];
+      var sdt = displayType(s);
+      h += '<div class="action-item" onclick="editSourceByIndex(' + i + ')">';
+      h += '<div class="action-item-header">';
+      h += '<span class="badge badge-src-' + esc(sdt) + '">' + esc(getTypeLabel(sdt)) + '</span>';
+      h += '<span class="action-item-title">' + esc(s.name || s.id) + '</span>';
+      h += '</div>';
+      h += '</div>';
+    }
   }
 
-  if (_selectedSourceId && _selectedSourceId !== '') {
-    var isNew = _selectedSourceId === '__new__';
-    renderFooter([
-      !isNew ? { label: 'Delete', cls: 'btn-danger', action: 'deleteSelectedSource()' } : null,
-      'spacer',
-      { label: isNew ? 'Create' : 'Save', cls: 'btn-primary', action: 'saveSource()' }
-    ].filter(Boolean));
-  } else {
-    renderFooter([]);
-  }
-}
-
-function onSourceSelect(val) {
-  _selectedSourceId = val;
-  showSources();
-}
-
-function deleteSelectedSource() {
-  if (!state.originalSource) return;
-  var sources = getSources();
-  var filtered = sources.filter(function(s) { return s.id !== state.originalSource.id; });
-  setSources(filtered);
-  _selectedSourceId = '';
-  state.editingSource = null;
-  state.originalSource = null;
-  persistConfig('Source deleted');
-  showSources();
+  safeSetHTML(document.getElementById('content'), h);
+  renderFooter([
+    'spacer',
+    { label: 'New Source', cls: 'btn-primary', action: 'showCreateSource()' }
+  ]);
 }
 
 
@@ -1064,22 +1037,10 @@ function editSourceByIndex(idx) {
     showSourceEditor(sources[idx]);
   }
 }
-
-function moveSource(idx, dir) {
-  var sources = getSources();
-  var newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= sources.length) return;
-  var temp = sources[idx];
-  sources[idx] = sources[newIdx];
-  sources[newIdx] = temp;
-  setSources(sources);
-  persistConfig('Source reordered');
-  showSources();
-}
-
 function showCreateSource() {
+  state.view = 'sourceEditor';
   updateTabBar('sourceEditor');
-  var s = { id: 'new_source', type: 'http', method: 'POST', url: '', extract: '$', columns: {}, schedule: 'manual' };
+  var s = { id: generateId(), name: '', type: 'http', method: 'POST', url: '', extract: '$', columns: {}, schedule: 'manual' };
   state.editingSource = s;
   state.originalSource = null;
   renderHeader('Source', { back: 'showSources()' });
@@ -1096,7 +1057,7 @@ function showSourceEditor(source) {
   updateTabBar('sourceEditor');
   state.editingSource = deepCopy(source);
   state.originalSource = deepCopy(source);
-  renderHeader('Source: ' + source.id, { back: 'showSources()' });
+  renderHeader(source.name || source.id, { back: 'showSources()' });
   renderSourceEditorContent();
   renderFooter([
     { label: 'Delete', cls: 'btn-danger', action: 'confirmDeleteSource()' },
@@ -1113,8 +1074,13 @@ function renderSourceEditorContent() {
   var h = '';
 
   h += '<div class="section"><div class="section-title">Source</div>';
+  h += field('Name', '<input class="field-input" name="src_name" value="' + esc(s.name || s.id || '') + '" placeholder="e.g. Weather API">');
   h += field('Type', '<select class="field-select" name="src_type" onchange="onSourceTypeChange(this.value)">' +
-    labelOpt('webhook', 'Webhook', s.type) + labelOpt('http', 'HTTP', s.type) + labelOpt('ai', 'AI', s.type) + labelOpt('exec', 'Exec', s.type) + labelOpt('script', 'Script', s.type) + '</select>');
+    labelOpt('webhook', getTypeLabel('webhook'), s.type) +
+    labelOpt('http', getTypeLabel('http'), s.type) +
+    labelOpt('ai', getTypeLabel('ai'), s.type) +
+    labelOpt('exec', getTypeLabel('exec'), s.type) +
+    labelOpt('script', getTypeLabel('script'), s.type) + '</select>');
   h += '</div>';
 
   // Type-specific fields
@@ -1203,8 +1169,8 @@ function renderSourceEditorContent() {
 
     h += '<div class="section"><div class="section-title">Define Outputs</div>';
     h += '<div class="field"><span class="field-label">Output format</span>';
-    h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="src_ai_outputFormat" value="fields"' + (srcOutputFormat === 'fields' ? ' checked' : '') + ' onchange="toggleSrcAiOutput(\'fields\')"> Fields</label>';
-    h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="src_ai_outputFormat" value="json"' + (srcOutputFormat === 'json' ? ' checked' : '') + ' onchange="toggleSrcAiOutput(\'json\')"> JSON Schema</label>';
+    h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="src_ai_outputFormat" value="fields"' + (srcOutputFormat === 'fields' ? ' checked' : '') + ' onchange="toggleOutputMode(\'src-ai\', \'fields\')"> Fields</label>';
+    h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="src_ai_outputFormat" value="json"' + (srcOutputFormat === 'json' ? ' checked' : '') + ' onchange="toggleOutputMode(\'src-ai\', \'json\')"> JSON Schema</label>';
     h += '</div>';
 
     // Fields mode
@@ -1212,10 +1178,10 @@ function renderSourceEditorContent() {
     h += '<div id="src-ai-fields-list">';
     if (srcOutputFields.length === 0) srcOutputFields = [{ name: '', type: 'text' }];
     for (var sfi = 0; sfi < srcOutputFields.length; sfi++) {
-      h += buildSrcAiOutputFieldRow(sfi, srcOutputFields[sfi]);
+      h += buildOutputFieldRow('src-ai', sfi, srcOutputFields[sfi]);
     }
     h += '</div>';
-    h += '<button class="kv-add" type="button" onclick="addSrcAiOutputField()">+ Add output</button>';
+    h += '<button class="kv-add" type="button" onclick="addOutputField(\'src-ai\')">+ Add output</button>';
     h += '</div>';
 
     // JSON Schema mode
@@ -1262,6 +1228,7 @@ function renderSourceEditorContent() {
 function onSourceTypeChange(newType) {
   var s = state.editingSource;
   s.id = getVal('src_id') || s.id;
+  s.name = getVal('src_name') || s.name;
   s.type = newType;
   delete s.method; delete s.url; delete s.headers; delete s.body;
   delete s.extract; delete s.extractPath; delete s.command; delete s.timeout;
@@ -1276,17 +1243,13 @@ function onSourceTypeChange(newType) {
   if (newType === 'exec') { s.command = ''; }
   if (newType === 'script') { s.script = ''; s.args = []; s._script_runtime = 'python3'; s._script_code = ''; }
   if (newType === 'ai') { s._ai_runtime = 'claude'; s._ai_prompt = ''; s._ai_outputFormat = 'fields'; }
-  // If in inline source view, re-render the whole sources view
-  if (state.view === 'sources') {
-    showSources();
-  } else {
-    renderSourceEditorContent();
-  }
+  renderSourceEditorContent();
 }
 
 function readFormSource() {
   var type = getVal('src_type');
   var s = { id: (state.editingSource && state.editingSource.id) || generateId(), type: type };
+  s.name = getVal('src_name').trim();
 
   if (type === 'http') {
     s.method = getVal('src_method') || 'POST';
@@ -1337,7 +1300,7 @@ function readFormSource() {
     for (var sri = 0; sri < srcRadios.length; sri++) {
       if (srcRadios[sri].checked) srcAiOutputFormat = srcRadios[sri].value;
     }
-    var srcAiOutputFields = readSrcAiOutputFields();
+    var srcAiOutputFields = readOutputFields('src-ai');
     var srcAiOutputSchema = getVal('src_ai_outputSchema').trim();
 
     // Build the output instruction to append to the prompt
@@ -1401,6 +1364,13 @@ function readFormSource() {
 }
 
 function saveSource() {
+  var name = getVal('src_name').trim();
+  if (!name) {
+    showToast('Source name is required', 'error');
+    var nameInput = document.querySelector('[name="src_name"]');
+    if (nameInput && nameInput.focus) nameInput.focus();
+    return;
+  }
   var newSource = readFormSource();
   ensureConfig();
   var sources = getSources();
@@ -1423,39 +1393,16 @@ function saveSource() {
 }
 
 function confirmDeleteSource() {
-  var overlay = document.createElement('div');
-  overlay.className = 'confirm-overlay';
-  var dialog = document.createElement('div');
-  dialog.className = 'confirm-dialog';
-  var title = document.createElement('h3');
-  title.textContent = 'Delete Source';
-  var msg = document.createElement('p');
-  msg.textContent = 'Remove this source? This cannot be undone.';
-  var btns = document.createElement('div');
-  btns.className = 'confirm-dialog-btns';
-  var cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn btn-secondary';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.onclick = function() { overlay.remove(); };
-  var deleteBtn = document.createElement('button');
-  deleteBtn.className = 'btn btn-danger';
-  deleteBtn.textContent = 'Delete';
-  deleteBtn.onclick = function() {
-    overlay.remove();
+  showConfirmDialog('Delete Source', 'Remove this source? This cannot be undone.', function() {
     if (!state.originalSource) { showSources(); return; }
     var sources = getSources();
     var filtered = sources.filter(function(s) { return s.id !== state.originalSource.id; });
     setSources(filtered);
     persistConfig('Source deleted');
+    state.editingSource = null;
+    state.originalSource = null;
     showSources();
-  };
-  btns.appendChild(cancelBtn);
-  btns.appendChild(deleteBtn);
-  dialog.appendChild(title);
-  dialog.appendChild(msg);
-  dialog.appendChild(btns);
-  overlay.appendChild(dialog);
-  document.body.appendChild(overlay);
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1477,18 +1424,12 @@ function showSettings() {
     retryBackoff: tabS.retryBackoff || global.retryBackoff || 'exponential'
   };
 
-  var tabName = state.columnInfo ? state.columnInfo.tabName : 'Tab';
   var enabled = isTabEnabled();
-  var h = '<p class="field-hint" style="margin-bottom:16px">Settings for <strong>' + esc(tabName) + '</strong>. Overrides global defaults.</p>';
-
-  h += '<div class="section"><div class="section-title">Pipeline</div>';
+  var h = '<div class="section"><div class="section-title">Execution</div>';
   h += '<div class="toggle-row">';
   h += '<div><span style="font-size:13px;color:#202124">' + (enabled ? 'Table turned on' : 'Table turned off') + '</span></div>';
   h += '<div class="toggle ' + (enabled ? 'on' : '') + '" onclick="toggleTabEnabled()"><div class="toggle-knob"></div></div>';
   h += '</div>';
-  h += '</div>';
-
-  h += '<div class="section"><div class="section-title">Execution</div>';
   h += field('Concurrency', '<input class="field-input" type="number" min="1" name="concurrency" value="' + esc(s.concurrency) + '">', 'Number of rows to process in parallel');
   h += field('Rate Limit', '<input class="field-input" type="number" min="0" step="0.1" name="rateLimit" value="' + esc(s.rateLimit) + '">', 'Seconds between requests (e.g. 1 = one per second)');
   h += '</div>';
@@ -1532,7 +1473,6 @@ function saveSettings() {
 function showEditor(action, columnName) {
   state.view = 'editor';
   updateTabBar('editor');
-  if (columnName) state.columnInfo.column = columnName;
 
   // Show skeleton while fetching fresh config + headers
   renderHeader(resolveColumnName(action.target), { back: 'showOverview()' });
@@ -1553,7 +1493,7 @@ function showEditor(action, columnName) {
     state.editingAction = resolveActionForDisplay(a);
     state.originalAction = deepCopy(freshAction || action);
 
-    renderHeader(resolveColumnName(a.target), { back: 'showOverview()', columnSelect: true });
+    renderHeader(resolveColumnName(a.target), { back: 'showOverview()' });
     renderEditorContent();
     renderFooter([
       { label: 'Delete', cls: 'btn-danger', action: 'confirmDelete()' },
@@ -1570,6 +1510,7 @@ function renderEditorContent() {
 
   // Action Type
   h += '<div class="section"><div class="section-title">Action</div>';
+  h += field('Column', buildActionTargetSelect(a.target), 'Only columns without an action are available.');
   h += field('Type', buildTypeSelect(a.type));
   h += '</div>';
 
@@ -1594,82 +1535,30 @@ function renderEditorContent() {
 /* ═══════════════════════════════════════════════════════════════════════════
    VIEW: CREATE
    ═══════════════════════════════════════════════════════════════════════════ */
-function showCreate(columnName) {
-  if (columnName) {
-    // Column already selected — go straight to editor
-    showCreateWithColumn(columnName);
+function showCreateAction(defaultColumn) {
+  var available = getAvailableActionColumns(defaultColumn || '', '');
+  if (available.length === 0) {
+    showToast('All columns already have actions', 'error');
     return;
   }
-  // Show column picker first
-  state.view = 'create';
-  updateTabBar('create');
-  renderHeader('New Action', { back: 'showOverview()' });
-
-  // Fetch fresh headers then show picker
-  safeSetHTML(document.getElementById('content'), '<div style="padding:4px 0"><div class="skeleton skeleton-card"></div></div>');
-  safeSetHTML(document.getElementById('footer'), '');
-  fetchFreshHeaders(function() {
-    var headers = (state.columnInfo && state.columnInfo.headers) || [];
-    var h = '<div class="section"><div class="section-title">Select Column</div>';
-    h += '<span class="field-label">Column</span>';
-    h += '<select class="field-select" style="width:100%" id="create-col-select">';
-    for (var i = 0; i < headers.length; i++) {
-      h += '<option value="' + esc(headers[i]) + '">' + esc(headers[i]) + '</option>';
-    }
-    h += '</select></div>';
-    safeSetHTML(document.getElementById('content'), h);
-    renderFooter([
-      { label: 'Cancel', cls: 'btn-secondary', action: 'showOverview()' },
-      'spacer',
-      { label: 'Next', cls: 'btn-primary', action: 'showCreateWithColumn(document.getElementById("create-col-select").value)' }
-    ]);
-  });
-}
-
-function showCreateWithColumn(col) {
-  state.view = 'create';
-  updateTabBar('create');
-  if (state.columnInfo) state.columnInfo.column = col;
-  var a = { id: generateId(), type: 'http', target: col, method: 'GET', url: '', extract: '' };
-  state.editingAction = a;
+  state.view = 'editor';
+  updateTabBar('editor');
+  state.editingAction = {
+    id: generateId(),
+    type: 'http',
+    target: defaultColumn || available[0],
+    method: 'GET',
+    url: '',
+    extract: ''
+  };
   state.originalAction = null;
-
-  renderHeader(col, { back: 'showOverview()', columnSelect: true });
+  renderHeader('Action', { back: 'showOverview()' });
   renderEditorContent();
   renderFooter([
     { label: 'Cancel', cls: 'btn-secondary', action: 'cancelEdit()' },
     'spacer',
     { label: 'Create', cls: 'btn-primary', action: 'saveAction()' }
   ]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   VIEW: COLUMN (auto-detect)
-   ═══════════════════════════════════════════════════════════════════════════ */
-function showColumn(columnName) {
-  var col = columnName || (state.columnInfo ? state.columnInfo.column : '');
-  if (!col) { showOverview(); return; }
-  updateTabBar('column');
-  state.columnInfo.column = col;
-  var action = findActionByTarget(col);
-  if (action) {
-    showEditor(action, col);
-  } else {
-    showCreatePrompt(col);
-  }
-}
-
-function showCreatePrompt(col) {
-  state.view = 'create';
-  updateTabBar('create');
-  renderHeader(col, { back: 'showOverview()', columnSelect: true });
-  var h = '<div class="empty-state">';
-  h += '<div class="empty-state-title">No action for &quot;' + esc(col) + '&quot;</div>';
-  h += '<p>This column has no enrichment action configured yet.</p>';
-  h += '<br><button class="btn btn-primary" onclick="showCreate(\'' + esc(col).replace(/'/g, "\\'") + '\')">+ Create Action</button>';
-  h += '</div>';
-  safeSetHTML(document.getElementById('content'), h);
-  renderFooter([]);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1680,7 +1569,7 @@ function buildTypeSelect(current) {
   var h = '<select class="field-select" name="type" onchange="onTypeChange(this.value)">';
   for (var i = 0; i < types.length; i++) {
     h += '<option value="' + types[i] + '"' + (types[i] === current ? ' selected' : '') + '>' +
-         (types[i] === 'ai' ? 'AI' : types[i].charAt(0).toUpperCase() + types[i].slice(1)) + '</option>';
+         getTypeLabel(types[i]) + '</option>';
   }
   return h + '</select>';
 }
@@ -1778,7 +1667,7 @@ function buildProviderCard(p, idx) {
 
 function buildFormulaFields(a) {
   // Resolve column IDs to names for display
-  var expr = resolveExpressionIds(a.expression || '');
+  var expr = resolveIds(a.expression || '');
   var h = '<div class="section"><div class="section-title">Formula</div>';
   h += field('Expression',
     '<textarea class="field-textarea" name="expression" rows="3" placeholder="Type / to insert a column">' +
@@ -1930,8 +1819,8 @@ function buildAiFields(a) {
 
   h += '<div class="section"><div class="section-title">Define Outputs</div>';
   h += '<div class="field"><span class="field-label">Output format</span>';
-  h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="_ai_outputFormat" value="fields"' + (outputFormat === 'fields' ? ' checked' : '') + ' onchange="toggleAiOutput(\'fields\')"> Fields</label>';
-  h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="_ai_outputFormat" value="json"' + (outputFormat === 'json' ? ' checked' : '') + ' onchange="toggleAiOutput(\'json\')"> JSON Schema</label>';
+  h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="_ai_outputFormat" value="fields"' + (outputFormat === 'fields' ? ' checked' : '') + ' onchange="toggleOutputMode(\'ai\', \'fields\')"> Fields</label>';
+  h += '<label style="display:block;margin:4px 0;cursor:pointer"><input type="radio" name="_ai_outputFormat" value="json"' + (outputFormat === 'json' ? ' checked' : '') + ' onchange="toggleOutputMode(\'ai\', \'json\')"> JSON Schema</label>';
   h += '</div>';
 
   // Fields mode
@@ -1939,10 +1828,10 @@ function buildAiFields(a) {
   h += '<div id="ai-fields-list">';
   if (outputFields.length === 0) outputFields = [{ name: 'response', type: 'text' }];
   for (var fi = 0; fi < outputFields.length; fi++) {
-    h += buildAiOutputFieldRow(fi, outputFields[fi]);
+    h += buildOutputFieldRow('ai', fi, outputFields[fi]);
   }
   h += '</div>';
-  h += '<button class="kv-add" type="button" onclick="addAiOutputField()">+ Add output</button>';
+  h += '<button class="kv-add" type="button" onclick="addOutputField(\'ai\')">+ Add output</button>';
   h += '</div>';
 
   // JSON Schema mode
@@ -1998,98 +1887,53 @@ function onSrcAiProviderChange(provider) {
   if (container) safeSetHTML(container, buildAiModelSelect(provider, ''));
 }
 
-function toggleAiOutput(mode) {
-  document.getElementById('ai-output-fields').style.display = mode === 'fields' ? '' : 'none';
-  document.getElementById('ai-output-schema').style.display = mode === 'json' ? '' : 'none';
+function toggleOutputMode(prefix, mode) {
+  var fields = document.getElementById(prefix + '-output-fields');
+  var schema = document.getElementById(prefix + '-output-schema');
+  if (fields) fields.style.display = mode === 'fields' ? '' : 'none';
+  if (schema) schema.style.display = mode === 'json' ? '' : 'none';
 }
 
-function buildAiOutputFieldRow(idx, f) {
-  var h = '<div class="kv-row" data-ai-field="' + idx + '">';
-  h += '<input class="field-input" data-ai-field-name="' + idx + '" value="' + esc(f.name || '') + '" placeholder="Field name" style="flex:2">';
-  h += '<select class="field-select" data-ai-field-type="' + idx + '" style="flex:1;min-width:80px">';
+function buildOutputFieldRow(prefix, idx, f) {
+  var safePrefix = esc(prefix);
+  var jsPrefix = prefix.replace(/'/g, "\\'");
+  var h = '<div class="kv-row" data-output-prefix="' + safePrefix + '" data-output-field="' + idx + '">';
+  h += '<input class="field-input" data-output-prefix="' + safePrefix + '" data-output-field-name="' + idx + '" value="' + esc(f.name || '') + '" placeholder="Field name" style="flex:2">';
+  h += '<select class="field-select" data-output-prefix="' + safePrefix + '" data-output-field-type="' + idx + '" style="flex:1;min-width:80px">';
   var types = ['text', 'number', 'checkbox'];
   for (var i = 0; i < types.length; i++) {
     h += '<option value="' + types[i] + '"' + (types[i] === (f.type || 'text') ? ' selected' : '') + '>' +
-      types[i].charAt(0).toUpperCase() + types[i].slice(1) + '</option>';
+      getOutputFieldTypeLabel(types[i]) + '</option>';
   }
   h += '</select>';
-  h += '<button class="kv-remove" type="button" onclick="removeAiOutputField(' + idx + ')" title="Remove">&times;</button>';
+  h += '<button class="kv-remove" type="button" onclick="removeOutputField(\'' + jsPrefix + '\', ' + idx + ')" title="Remove">&times;</button>';
   h += '</div>';
   return h;
 }
 
-function addAiOutputField() {
-  var list = document.getElementById('ai-fields-list');
-  var rows = list.querySelectorAll('[data-ai-field]');
+function addOutputField(prefix) {
+  var list = document.getElementById(prefix + '-fields-list');
+  if (!list) return;
+  var rows = list.querySelectorAll('[data-output-prefix="' + prefix + '"][data-output-field]');
   var idx = rows.length;
-  // Use safeSetHTML-compatible approach: build the row and append via DOM
   var tmp = document.createElement('div');
-  safeSetHTML(tmp, buildAiOutputFieldRow(idx, { name: '', type: 'text' }));
+  safeSetHTML(tmp, buildOutputFieldRow(prefix, idx, { name: '', type: 'text' }));
   list.appendChild(tmp.firstChild);
 }
 
-function removeAiOutputField(idx) {
-  var row = document.querySelector('[data-ai-field="' + idx + '"]');
+function removeOutputField(prefix, idx) {
+  var row = document.querySelector('[data-output-prefix="' + prefix + '"][data-output-field="' + idx + '"]');
   if (row) row.remove();
 }
 
-function readAiOutputFields() {
+function readOutputFields(prefix) {
   var fields = [];
-  var names = document.querySelectorAll('[data-ai-field-name]');
+  var names = document.querySelectorAll('[data-output-prefix="' + prefix + '"][data-output-field-name]');
   for (var i = 0; i < names.length; i++) {
     var name = names[i].value.trim();
     if (!name) continue;
-    var idx = names[i].getAttribute('data-ai-field-name');
-    var typeEl = document.querySelector('[data-ai-field-type="' + idx + '"]');
-    fields.push({ name: name, type: typeEl ? typeEl.value : 'text' });
-  }
-  return fields;
-}
-
-// ── Source AI output helpers (prefixed with src- to avoid collisions) ──────
-
-function toggleSrcAiOutput(mode) {
-  document.getElementById('src-ai-output-fields').style.display = mode === 'fields' ? '' : 'none';
-  document.getElementById('src-ai-output-schema').style.display = mode === 'json' ? '' : 'none';
-}
-
-function buildSrcAiOutputFieldRow(idx, f) {
-  var h = '<div class="kv-row" data-src-ai-field="' + idx + '">';
-  h += '<input class="field-input" data-src-ai-field-name="' + idx + '" value="' + esc(f.name || '') + '" placeholder="Field name" style="flex:2">';
-  h += '<select class="field-select" data-src-ai-field-type="' + idx + '" style="flex:1;min-width:80px">';
-  var types = ['text', 'number', 'checkbox'];
-  for (var i = 0; i < types.length; i++) {
-    h += '<option value="' + types[i] + '"' + (types[i] === (f.type || 'text') ? ' selected' : '') + '>' +
-      types[i].charAt(0).toUpperCase() + types[i].slice(1) + '</option>';
-  }
-  h += '</select>';
-  h += '<button class="kv-remove" type="button" onclick="removeSrcAiOutputField(' + idx + ')" title="Remove">&times;</button>';
-  h += '</div>';
-  return h;
-}
-
-function addSrcAiOutputField() {
-  var list = document.getElementById('src-ai-fields-list');
-  var rows = list.querySelectorAll('[data-src-ai-field]');
-  var idx = rows.length;
-  var tmp = document.createElement('div');
-  safeSetHTML(tmp, buildSrcAiOutputFieldRow(idx, { name: '', type: 'text' }));
-  list.appendChild(tmp.firstChild);
-}
-
-function removeSrcAiOutputField(idx) {
-  var row = document.querySelector('[data-src-ai-field="' + idx + '"]');
-  if (row) row.remove();
-}
-
-function readSrcAiOutputFields() {
-  var fields = [];
-  var names = document.querySelectorAll('[data-src-ai-field-name]');
-  for (var i = 0; i < names.length; i++) {
-    var name = names[i].value.trim();
-    if (!name) continue;
-    var idx = names[i].getAttribute('data-src-ai-field-name');
-    var typeEl = document.querySelector('[data-src-ai-field-type="' + idx + '"]');
+    var idx = names[i].getAttribute('data-output-field-name');
+    var typeEl = document.querySelector('[data-output-prefix="' + prefix + '"][data-output-field-type="' + idx + '"]');
     fields.push({ name: name, type: typeEl ? typeEl.value : 'text' });
   }
   return fields;
@@ -2256,10 +2100,11 @@ function toggleUpsert(mode) {
    ═══════════════════════════════════════════════════════════════════════════ */
 function readFormAction() {
   var type = getVal('type');
+  var targetColumn = getVal('action_target').trim();
   var a = {
     id: (state.editingAction && state.editingAction.id) || generateId(),
     type: type,
-    target: state.columnInfo.column
+    target: targetColumn ? resolveColumnId(targetColumn) : ''
   };
 
   var when = getVal('when').trim();
@@ -2358,7 +2203,7 @@ function readFormAction() {
       for (var ri = 0; ri < radios.length; ri++) {
         if (radios[ri].checked) aiOutputFormat = radios[ri].value;
       }
-      var aiOutputFields = readAiOutputFields();
+      var aiOutputFields = readOutputFields('ai');
       var aiOutputSchema = getVal('_ai_outputSchema').trim();
 
       // Build outputs object from fields
@@ -2452,42 +2297,41 @@ function onTypeChange(newType) {
   renderEditorContent();
 }
 
-function switchColumn(col) {
-  state.columnInfo.column = col;
-  showColumn(col);
-}
-
 function editActionByIndex(idx) {
-  var actions = getActions();
+  var actions = getSortedActions();
   if (idx >= 0 && idx < actions.length) {
     var a = actions[idx];
-    var col = resolveColumnName(a.target);
-    state.columnInfo.column = col;
-    showEditor(a, col);
+    showEditor(a, resolveColumnName(a.target));
   }
 }
 
-function moveAction(idx, dir) {
-  var actions = getActions();
-  var newIdx = idx + dir;
-  if (newIdx < 0 || newIdx >= actions.length) return;
-  var temp = actions[idx];
-  actions[idx] = actions[newIdx];
-  actions[newIdx] = temp;
-  setActions(actions);
-  persistConfig('Action reordered');
-  showOverview();
-}
-
 function saveAction() {
+  var targetColumn = getVal('action_target').trim();
+  if (!targetColumn) {
+    showToast('Action column is required', 'error');
+    var targetInput = document.querySelector('[name="action_target"]');
+    if (targetInput && targetInput.focus) targetInput.focus();
+    return;
+  }
+
+  var actions = getActions();
+  var currentActionId = state.originalAction ? state.originalAction.id : '';
+  for (var i = 0; i < actions.length; i++) {
+    if (currentActionId && actions[i].id === currentActionId) continue;
+    if (resolveColumnName(actions[i].target) === targetColumn) {
+      showToast('That column already has an action', 'error');
+      var columnSelect = document.querySelector('[name="action_target"]');
+      if (columnSelect && columnSelect.focus) columnSelect.focus();
+      return;
+    }
+  }
+
   var newAction = storeActionIds(readFormAction());
   ensureConfig();
-  var actions = getActions();
-
   var found = -1;
   if (state.originalAction) {
-    for (var i = 0; i < actions.length; i++) {
-      if (actions[i].id === state.originalAction.id) { found = i; break; }
+    for (var j = 0; j < actions.length; j++) {
+      if (actions[j].id === state.originalAction.id) { found = j; break; }
     }
   }
 
@@ -2505,41 +2349,17 @@ function saveAction() {
 }
 
 function cancelEdit() {
-  showColumn(state.columnInfo ? state.columnInfo.column : '');
+  state.editingAction = null;
+  state.originalAction = null;
+  showOverview();
 }
 
 function confirmDelete() {
-  var overlay = document.createElement('div');
-  overlay.className = 'confirm-overlay';
-
-  var dialog = document.createElement('div');
-  dialog.className = 'confirm-dialog';
-
-  var title = document.createElement('h3');
-  title.textContent = 'Delete Action';
-  var msg = document.createElement('p');
-  msg.textContent = 'Remove this action from the pipeline? This cannot be undone.';
-
-  var btns = document.createElement('div');
-  btns.className = 'confirm-dialog-btns';
-
-  var cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn btn-secondary';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.onclick = function() { overlay.remove(); };
-
-  var deleteBtn = document.createElement('button');
-  deleteBtn.className = 'btn btn-danger';
-  deleteBtn.textContent = 'Delete';
-  deleteBtn.onclick = function() { doDelete(); };
-
-  btns.appendChild(cancelBtn);
-  btns.appendChild(deleteBtn);
-  dialog.appendChild(title);
-  dialog.appendChild(msg);
-  dialog.appendChild(btns);
-  overlay.appendChild(dialog);
-  document.body.appendChild(overlay);
+  showConfirmDialog(
+    'Delete Action',
+    'Remove this action from the pipeline? This cannot be undone.',
+    doDelete
+  );
 }
 
 function doDelete() {
@@ -2550,6 +2370,8 @@ function doDelete() {
   var filtered = actions.filter(function(a) { return a.id !== state.originalAction.id; });
   setActions(filtered);
   persistConfig('Action deleted');
+  state.editingAction = null;
+  state.originalAction = null;
   showOverview();
 }
 
@@ -2607,7 +2429,7 @@ function showScripts() {
       var snippet = (sc.code || '').substring(0, 80).replace(/\n/g, ' ');
       h += '<div class="action-item" onclick="editScript(\'' + esc(name).replace(/'/g, "\\'") + '\')">';
       h += '<div class="action-item-header">';
-      h += '<span class="badge badge-script">' + esc(sc.runtime || 'bash') + '</span>';
+      h += '<span class="badge badge-script">' + esc(getScriptRuntimeLabel(sc.runtime || 'bash')) + '</span>';
       h += '<span class="action-item-title">' + esc(name) + '</span>';
       h += '</div>';
       h += '<div class="action-item-meta" style="font-family:monospace;font-size:11px">' + esc(snippet) + (sc.code && sc.code.length > 80 ? '...' : '') + '</div>';
@@ -2696,54 +2518,33 @@ function saveScript() {
 }
 
 function confirmDeleteScript() {
-  var overlay = document.createElement('div');
-  overlay.className = 'confirm-overlay';
-  var dialog = document.createElement('div');
-  dialog.className = 'confirm-dialog';
-  var title = document.createElement('h3');
-  title.textContent = 'Delete Script';
-  var msg = document.createElement('p');
-  msg.textContent = 'Remove this script? Actions and sources referencing it will break.';
-  var btns = document.createElement('div');
-  btns.className = 'confirm-dialog-btns';
-  var cancelBtn = document.createElement('button');
-  cancelBtn.className = 'btn btn-secondary';
-  cancelBtn.textContent = 'Cancel';
-  cancelBtn.onclick = function() { overlay.remove(); };
-  var deleteBtn = document.createElement('button');
-  deleteBtn.className = 'btn btn-danger';
-  deleteBtn.textContent = 'Delete';
-  deleteBtn.onclick = function() {
-    overlay.remove();
-    if (!state.originalScript) { showSettings(); return; }
-    var scripts = getScripts();
-    delete scripts[state.originalScript];
-    setScripts(scripts);
-    persistConfig('Script deleted');
-    showSettings();
-  };
-  btns.appendChild(cancelBtn);
-  btns.appendChild(deleteBtn);
-  dialog.appendChild(title);
-  dialog.appendChild(msg);
-  dialog.appendChild(btns);
-  overlay.appendChild(dialog);
-  document.body.appendChild(overlay);
+  showConfirmDialog(
+    'Delete Script',
+    'Remove this script? Actions and sources referencing it will break.',
+    function() {
+      if (!state.originalScript) { showSettings(); return; }
+      var scripts = getScripts();
+      delete scripts[state.originalScript];
+      setScripts(scripts);
+      persistConfig('Script deleted');
+      state.editingScript = null;
+      state.originalScript = null;
+      showSettings();
+    }
+  );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PERSIST
    ═══════════════════════════════════════════════════════════════════════════ */
-function persistConfig(message) {
-  serverCall('saveConfig', JSON.stringify(state.config), function(err) {
-    if (err) {
-      showToast('Error: ' + err.message, 'error');
-    } else {
-      showToast(message || 'Saved');
-      // Refresh config after save to stay in sync
-      refreshAll();
-    }
-  });
+async function persistConfig(message) {
+  try {
+    var result = await serverCallAsync('saveConfig', JSON.stringify(state.config));
+    if (result && result.version !== undefined) state.configVersion = result.version;
+    showToast(message || 'Saved');
+  } catch (err) {
+    showToast('Error: ' + err.message, 'error');
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -2793,9 +2594,6 @@ function resolveIds(expr) {
     return name ? '{{' + name + '}}' : match;
   });
 }
-
-// Keep old name as alias
-var resolveExpressionIds = resolveIds;
 
 /** Resolve all {{colId}} refs in an entire action object for display */
 function resolveActionForDisplay(a) {
@@ -2871,17 +2669,22 @@ var _colPickerIdx = -1;
 var _colPickerTarget = null;
 var _colPickerTriggerPos = -1;
 /** Force-fetch fresh headers from the sheet. Calls back when done. */
-function fetchFreshHeaders(callback) {
+async function fetchFreshHeaders(callback) {
   if (!state.columnInfo || !state.columnInfo.tabName) {
     if (callback) callback();
     return;
   }
-  serverCall('getTabHeaders', state.columnInfo.tabName, function(err, headers) {
-    if (!err && headers) {
-      state.columnInfo.headers = headers;
+
+  try {
+    var result = await serverCallAsync('getTabHeaders', state.columnInfo.tabName);
+    if (result) {
+      applyTabHeadersData(result, state.columnInfo.tabName);
     }
-    if (callback) callback();
-  });
+  } catch (err) {
+    // Column picker refresh is best-effort only.
+  }
+
+  if (callback) callback();
 }
 
 /** Global listener: detect / in any input or textarea to show column picker */
@@ -3033,7 +2836,7 @@ function updateSheetTabSelector() {
 }
 
 /** Handle sheet tab selection from dropdown — fetches headers then renders */
-function onSheetTabSelect(gid) {
+async function onSheetTabSelect(gid) {
   if (!gid || !state.config || !state.columnInfo) return;
   if (gid === state.columnInfo.tabGid) return;
 
@@ -3054,18 +2857,21 @@ function onSheetTabSelect(gid) {
   refreshCurrentView();
 
   // Fetch fresh headers so column dropdowns work correctly
-  serverCall('getTabHeaders', tab.name, function(err, headers) {
-    if (!err && headers && state.columnInfo.tabName === tab.name) {
-      state.columnInfo.headers = headers;
+  try {
+    var result = await serverCallAsync('getTabHeaders', tab.name);
+    if (result && state.columnInfo.tabName === tab.name) {
+      applyTabHeadersData(result, tab.name);
     }
-  });
+  } catch (err) {
+    // Leave the tab rendered with its existing config if the header fetch fails.
+  }
 }
 
 function applyInitData(data) {
   state.config = data.config;
+  state.configVersion = data.configVersion || 0;
   state.columnInfo = data.columnInfo;
   state.tabs = data.tabs || [];
-  if (data.configVersion !== undefined) _knownConfigVersion = data.configVersion;
   ensureConfig();
   updateSheetTabSelector();
 
@@ -3073,7 +2879,7 @@ function applyInitData(data) {
   var sheetSel = document.getElementById('sheet-tab-selector');
   var tabBar = document.getElementById('tab-bar');
   if (sheetSel) sheetSel.style.display = '';
-  if (tabBar) tabBar.style.display = 'flex';
+  if (tabBar) tabBar.style.display = '';
 
   // Only navigate to a view on first load — don't interrupt if user is mid-edit
   if (!state.editingAction && !state.editingSource && !state.editingScript) {
@@ -3086,30 +2892,23 @@ function applyInitData(data) {
   }
 }
 
-var _initDone = false;
-
-function init() {
+async function init() {
   // Show skeleton until fresh data arrives — don't render from stale cache
   // because it causes the view to reset if the user navigates before data loads
-  serverCall('getInitData', undefined, function(err, data) {
-    if (err) {
-      safeSetHTML(document.getElementById('content'),
-        '<div class="empty-state"><div class="empty-state-title">Error loading</div>' +
-        '<p>' + esc(err.message || 'Unknown error') + '</p></div>');
-      return;
-    }
-    try { sessionStorage.setItem('rb_initData', JSON.stringify(data)); } catch (e) {}
-    _initDone = true;
+  try {
+    var data = await serverCallAsync('getInitData');
     applyInitData(data);
-  });
+  } catch (err) {
+    safeSetHTML(document.getElementById('content'),
+      '<div class="empty-state"><div class="empty-state-title">Error loading</div>' +
+      '<p>' + esc(err.message || 'Unknown error') + '</p></div>');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', function() {
   init();
 });
 
-/** Show a skeleton loading state with the new tab name so the user
- *  sees instant feedback while we fetch the tab's config. */
 /** Re-render the current list view (overview/sources/settings). */
 function refreshCurrentView() {
   switch (state.view) {
@@ -3119,48 +2918,84 @@ function refreshCurrentView() {
   }
 }
 
-// Track known config version
-var _knownConfigVersion = 0;
+function renderSyncSkeleton() {
+  var h = '<div style="padding:4px 0">';
+  if (state.view === 'settings') {
+    h += '<div class="skeleton" style="height:28px;width:100%;margin-bottom:14px;border-radius:6px"></div>';
+    h += '<div class="skeleton" style="height:40px;width:100%;margin-bottom:12px;border-radius:8px"></div>';
+    h += '<div class="skeleton" style="height:56px;width:100%;margin-bottom:12px;border-radius:8px"></div>';
+    h += '<div class="skeleton" style="height:56px;width:100%;margin-bottom:12px;border-radius:8px"></div>';
+  } else {
+    h += '<div class="skeleton skeleton-card"></div>';
+    h += '<div class="skeleton skeleton-card"></div>';
+    h += '<div class="skeleton skeleton-card"></div>';
+    h += '<div class="skeleton skeleton-card"></div>';
+  }
+  h += '</div>';
+  safeSetHTML(document.getElementById('content'), h);
+  safeSetHTML(document.getElementById('footer'), '');
+}
+
+function syncNow() {
+  refreshAll(undefined, true);
+}
+
 var _refreshing = false;
 
 /**
- * Refresh everything — config, tabs, headers. Called by the refresh button
- * and automatically after save/delete operations.
+ * Refresh everything — config, tabs, headers.
  */
-function refreshAll(callback) {
+async function refreshAll(callback, showSkeleton) {
   if (_refreshing && !callback) return;
   _refreshing = true;
 
   // Visual feedback
   var btn = document.getElementById('refresh-btn');
   if (btn) btn.style.opacity = '0.5';
+  if (showSkeleton && !callback) renderSyncSkeleton();
+  try {
+    var poll = await serverCallAsync('pollState');
+    if (!poll) return;
 
-  serverCall('getInitData', undefined, function(err, data) {
+    state.tabs = poll.tabs || [];
+    updateSheetTabSelector();
+
+    if (!state.config || poll.configVersion !== state.configVersion) {
+      try {
+        var full = await serverCallAsync('loadConfigFull');
+        if (full) {
+          state.config = full.config;
+          state.configVersion = full.version || poll.configVersion || 0;
+          ensureConfig();
+        } else {
+          state.configVersion = poll.configVersion || state.configVersion;
+        }
+      } catch (loadErr) {
+        state.configVersion = poll.configVersion || state.configVersion;
+      }
+    } else {
+      state.configVersion = poll.configVersion || state.configVersion;
+    }
+
+    if (state.columnInfo && state.columnInfo.tabName) {
+      try {
+        var result = await serverCallAsync('getTabHeaders', state.columnInfo.tabName);
+        if (result) applyTabHeadersData(result, state.columnInfo.tabName);
+      } catch (headersErr) {
+        // Keep current headers when the refresh is partial or fails.
+      }
+    }
+  } catch (err) {
+    // Leave the current UI in place on refresh failure.
+  } finally {
     _refreshing = false;
     if (btn) btn.style.opacity = '1';
-    if (err || !data) {
-      if (callback) callback();
-      return;
-    }
-
-    state.config = data.config;
-    state.tabs = data.tabs || [];
-    if (data.configVersion !== undefined) _knownConfigVersion = data.configVersion;
-
-    // Update headers for current tab
-    if (data.columnInfo) {
-      state.columnInfo.headers = data.columnInfo.headers;
-    }
-
-    updateSheetTabSelector();
-    try { sessionStorage.setItem('rb_initData', JSON.stringify(data)); } catch (e) {}
-
     if (callback) {
       callback();
     } else if (!state.editingAction && !state.editingSource && !state.editingScript) {
       refreshCurrentView();
     }
-  });
+  }
 }
 </script>
 </body>
