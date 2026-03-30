@@ -20,7 +20,7 @@
     "push": "bash scripts/push-appscript.sh"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.1",
+    "@modelcontextprotocol/sdk": "^1.28.0",
     "@types/node": "^22.13.10",
     "commander": "^13.1.0",
     "dotenv": "^16.4.7",
@@ -56,6 +56,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "overrides": {
+    "path-to-regexp": "^8.4.0"
   },
   "keywords": [
     "google-sheets",
