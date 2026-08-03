@@ -6,7 +6,7 @@
 
 <p align="center"><img src="assets/demo.gif" width="88%" alt="New rows appear, columns fill with company names, emails, and AI classifications" /></p>
 
-<p align="center"><a href="docs/getting-started.md"><img src="assets/buttons/build-my-first-table.svg" alt="Build my first table" /></a>&nbsp;&nbsp;<a href="https://cal.com/stravik/demo?projects=Rowbound" target="_blank" rel="noopener"><img src="assets/buttons/book-a-demo.svg" alt="Book a demo" /></a></p>
+<p align="center"><a href="https://github.com/eliasstravik/rowbound/blob/main/docs/getting-started.md"><img src="assets/buttons/build-my-first-table.svg" alt="Build my first table" /></a>&nbsp;&nbsp;<a href="https://cal.com/stravik/demo?projects=Rowbound" target="_blank" rel="noopener noreferrer"><img src="assets/buttons/book-a-demo.svg" alt="Book a demo" /></a></p>
 
 <p align="center"><sub>✓&nbsp;100%&nbsp;free&nbsp;and&nbsp;open&nbsp;source &nbsp; ✓&nbsp;No&nbsp;credits&nbsp;or&nbsp;lock&#8209;in &nbsp; ✓&nbsp;Built&nbsp;to&nbsp;be&nbsp;run&nbsp;by&nbsp;Claude&nbsp;Code</sub></p>
 
@@ -65,8 +65,8 @@ When the row cap stops a campaign or the credit bill stops making sense, move th
 <td align="center" valign="top" width="50%"><h3>Done-for-you</h3><sub>Hands-on setup for your GTM team</sub><br /><h2>Let's talk</h2><div align="left">&nbsp;&nbsp;&nbsp;✓&nbsp; Everything in self-serve<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Full setup and installation<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Provider and API key configuration<br />&nbsp;&nbsp;&nbsp;✓&nbsp; First tables built together with your team<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Team training and best practices<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Ongoing maintenance and upgrades<br />&nbsp;&nbsp;&nbsp;✓&nbsp; Dedicated Slack channel support</div></td>
 </tr>
 <tr>
-<td align="center"><a href="docs/getting-started.md"><img src="assets/buttons/build-my-first-table.svg" alt="Build my first table" /></a></td>
-<td align="center"><a href="https://cal.com/stravik/demo?projects=Rowbound" target="_blank" rel="noopener"><img src="assets/buttons/book-a-demo.svg" alt="Book a demo" /></a></td>
+<td align="center"><a href="https://github.com/eliasstravik/rowbound/blob/main/docs/getting-started.md"><img src="assets/buttons/build-my-first-table.svg" alt="Build my first table" /></a></td>
+<td align="center"><a href="https://cal.com/stravik/demo?projects=Rowbound" target="_blank" rel="noopener noreferrer"><img src="assets/buttons/book-a-demo.svg" alt="Book a demo" /></a></td>
 </tr>
 </table>
 
@@ -94,7 +94,7 @@ Rowbound imposes none. The only ceiling is Google Sheets' own cell limit, which 
 
 <p align="center">A working enriched table, minutes from now, at provider prices. Claude Code does the building. You just describe what you want.</p>
 
-<p align="center"><a href="docs/getting-started.md"><img src="assets/buttons/build-my-first-table.svg" alt="Build my first table" /></a>&nbsp;&nbsp;<a href="https://cal.com/stravik/demo?projects=Rowbound" target="_blank" rel="noopener"><img src="assets/buttons/book-a-demo.svg" alt="Book a demo" /></a></p>
+<p align="center"><a href="https://github.com/eliasstravik/rowbound/blob/main/docs/getting-started.md"><img src="assets/buttons/build-my-first-table.svg" alt="Build my first table" /></a>&nbsp;&nbsp;<a href="https://cal.com/stravik/demo?projects=Rowbound" target="_blank" rel="noopener noreferrer"><img src="assets/buttons/book-a-demo.svg" alt="Book a demo" /></a></p>
 
 <p align="center"><sub>✓&nbsp;100%&nbsp;free&nbsp;and&nbsp;open&nbsp;source &nbsp; ✓&nbsp;No&nbsp;credits&nbsp;or&nbsp;lock&#8209;in &nbsp; ✓&nbsp;Built&nbsp;to&nbsp;be&nbsp;run&nbsp;by&nbsp;Claude&nbsp;Code</sub></p>
 
