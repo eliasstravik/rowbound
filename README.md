@@ -14,7 +14,7 @@
 
 <br />
 
-## See what GTM teams are saying
+## Run your GTM stack where your team and agents already work
 
 > **"I wanted a familiar interface the whole GTM team could review while letting Claude Code do the heavy lifting. That's why I built Rowbound."**
 >
